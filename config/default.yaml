@@ -1,0 +1,99 @@
+# ===========================================================================
+# MDGT Edge Fingerprint Verification System - Default Configuration
+# ===========================================================================
+# All values here represent sensible defaults and can be overridden by
+# environment-specific YAML files or the system_config database table.
+
+# ---------------------------------------------------------------------------
+# Verification / Matching
+# ---------------------------------------------------------------------------
+verification:
+  verify_threshold: 0.55          # cosine similarity threshold for 1:1 verify
+  identify_threshold: 0.50        # cosine similarity threshold for 1:N identify
+  identify_top_k: 5               # max candidates returned in identify mode
+  max_failed_attempts: 3          # lock-out after N consecutive failures
+  cooldown_seconds: 30            # seconds before lock-out resets
+
+# ---------------------------------------------------------------------------
+# Quality Control
+# ---------------------------------------------------------------------------
+quality:
+  min_quality_enroll: 40          # minimum NFIQ-style quality for enrolment (0-100)
+  min_minutiae_count: 12          # reject images with fewer minutiae than this
+
+# ---------------------------------------------------------------------------
+# FAISS / KNN Index
+# ---------------------------------------------------------------------------
+index:
+  knn_k: 16                      # k for k-nearest-neighbour search
+  faiss_nprobe: 8                 # number of Voronoi cells to probe (IVF index)
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  model_path: "models/mdgtv2_fp16.engine"
+  embedding_dim: 256
+  input_size: [224, 224]          # height x width expected by the model
+  batch_size: 1
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+database:
+  path: "data/mdgt_edge.db"
+  wal_mode: true
+  busy_timeout_ms: 5000
+
+# ---------------------------------------------------------------------------
+# Encryption
+# ---------------------------------------------------------------------------
+encryption:
+  key_env_var: "MDGT_ENCRYPTION_KEY"
+  serial_env_var: "MDGT_DEVICE_SERIAL"
+  pbkdf2_iterations: 480000
+
+# ---------------------------------------------------------------------------
+# Sensor
+# ---------------------------------------------------------------------------
+sensor:
+  type: "uart"                    # uart | usb | mock
+  port: "/dev/ttyUSB0"
+  baud_rate: 115200
+  timeout_seconds: 5
+
+# ---------------------------------------------------------------------------
+# API Server
+# ---------------------------------------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1                      # single worker on edge device
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+
+# ---------------------------------------------------------------------------
+# WebSocket
+# ---------------------------------------------------------------------------
+websocket:
+  ping_interval: 30
+  ping_timeout: 10
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  file: "logs/mdgt_edge.log"
+  max_bytes: 10485760             # 10 MB
+  backup_count: 5
+
+# ---------------------------------------------------------------------------
+# Device
+# ---------------------------------------------------------------------------
+device:
+  id: "edge-001"
+  name: "MDGT Edge Device"
+  location: "Main Entrance"
