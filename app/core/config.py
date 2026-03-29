@@ -1,0 +1,147 @@
+"""
+Centralized configuration for Fingerprint Jetson Nano Worker.
+
+All configurations are loaded from:
+  1. .env file (highest priority)
+  2. Environment variables (overrides .env)
+  3. Default values defined in this class
+
+See .env.example for all configurable variables.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    """
+    Configuration for Jetson Nano Worker.
+
+    Environment prefix: WORKER_
+    Example: WORKER_DEBUG=true, WORKER_PORT=8000
+    """
+
+    # -------------------------------------------------------------------------
+    # API Server
+    # -------------------------------------------------------------------------
+    api_prefix: str = "/api/v1"
+    host: str = "0.0.0.0"
+    port: int = 8000
+    debug: bool = False
+
+    # -------------------------------------------------------------------------
+    # Device Identification
+    # -------------------------------------------------------------------------
+    device_id: str = "JETSON-001"
+
+    # -------------------------------------------------------------------------
+    # Directory Paths (relative to runtime dir)
+    # -------------------------------------------------------------------------
+    model_dir: str = "models/"
+    data_dir: str = "data/"
+    backup_dir: str = "data/backups/"
+
+    # -------------------------------------------------------------------------
+    # Inference Backend
+    # Choose "tensorrt" for optimized speed on Jetson Nano (FP16).
+    # Choose "onnx" to fallback if TensorRT is unavailable.
+    # -------------------------------------------------------------------------
+    backend: str = Field(
+        default="tensorrt",
+        description="Inference backend: 'tensorrt' | 'onnx'",
+    )
+    model_path: str = Field(
+        default="models/mdgtv2_fp16.engine",
+        description="Path to model file (.engine or .onnx)",
+    )
+
+    # -------------------------------------------------------------------------
+    # Pipeline — Feature extraction parameters
+    # -------------------------------------------------------------------------
+    image_width: int = 192
+    image_height: int = 192
+    knn_k: int = 16                # number of neighbors in graph builder
+    embedding_dim: int = 256       # embedding vector dimension
+    extractor: str = "cn"          # minutiae extraction method: "cn" | "fingernet"
+    fingernet_model_path: str = "" # ONNX path if using FingerNet
+    clahe_clip: float = 2.5        # CLAHE clip level for preprocessing (0–8)
+    clahe_grid: int = 8            # CLAHE grid size
+
+    # -------------------------------------------------------------------------
+    # Matching Thresholds
+    # -------------------------------------------------------------------------
+    verify_threshold: float = Field(
+        default=0.55,
+        description="Cosine similarity threshold for 1:1 verification",
+    )
+    identify_threshold: float = Field(
+        default=0.50,
+        description="Cosine similarity threshold for 1:N identification",
+    )
+    identify_top_k: int = Field(
+        default=5,
+        description="Max number of results returned in 1:N identification",
+    )
+
+    # -------------------------------------------------------------------------
+    # Fingerprint Sensor (USB)
+    # -------------------------------------------------------------------------
+    sensor_vid: int = Field(default=0x0483, description="USB Vendor ID of the sensor")
+    sensor_pid: int = Field(default=0x5720, description="USB Product ID of the sensor")
+    sensor_sdk_path: str = Field(
+        default="/opt/fingerprint-sdk",
+        description="Path to sensor SDK",
+    )
+
+    # -------------------------------------------------------------------------
+    # CORS — allowed origins to access API
+    # -------------------------------------------------------------------------
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+    ]
+
+    # -------------------------------------------------------------------------
+    # Database
+    # -------------------------------------------------------------------------
+    database_url: str = "sqlite+aiosqlite:///data/fingerprint.db"
+
+    model_config = {
+        "env_prefix": "WORKER_",
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
+
+    def as_pipeline_config(self) -> dict:
+        """
+        Returns config dict to initialize VerificationPipeline.
+        Separated so pipeline does not depend directly on Settings.
+        """
+        return {
+            "backend": self.backend,
+            "model_path": self.model_path,
+            "image_width": self.image_width,
+            "image_height": self.image_height,
+            "image_size": max(self.image_width, self.image_height),
+            "knn_k": self.knn_k,
+            "embedding_dim": self.embedding_dim,
+            "extractor": self.extractor,
+            "fingernet_model_path": self.fingernet_model_path,
+            "clahe_clip": self.clahe_clip,
+            "clahe_grid": self.clahe_grid,
+        }
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """
+    Returns Settings instance (singleton - created only once).
+    Uses lru_cache to ensure the same object is reused throughout the app.
+    """
+    return Settings()
