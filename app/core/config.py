@@ -111,6 +111,27 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     database_url: str = "sqlite+aiosqlite:///data/fingerprint.db"
 
+    # -------------------------------------------------------------------------
+    # MQTT — Connection to Orchestrator
+    # -------------------------------------------------------------------------
+    mqtt_enabled: bool = Field(default=True, description="Enable MQTT connection to orchestrator")
+    mqtt_broker_host: str = Field(default="localhost", description="MQTT broker hostname/IP")
+    mqtt_broker_port: int = Field(default=1883, description="MQTT broker port")
+    mqtt_username: str = ""
+    mqtt_password: str = ""
+    mqtt_client_id: str = ""
+    mqtt_keepalive: int = 60
+    mqtt_reconnect_delay: int = 5
+    heartbeat_interval: int = Field(default=10, description="Heartbeat interval in seconds")
+
+    # -------------------------------------------------------------------------
+    # Encryption — for fingerprint embedding storage
+    # -------------------------------------------------------------------------
+    encryption_key: str = Field(
+        default="",
+        description="Fernet key for encrypting embeddings. Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'",
+    )
+
     model_config = {
         "env_prefix": "WORKER_",
         "env_file": ".env",

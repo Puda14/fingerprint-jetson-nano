@@ -6,11 +6,16 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
+import os
 import shutil
+import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
+
+import requests
 
 from app.core.config import get_settings
 
@@ -20,14 +25,57 @@ logger = logging.getLogger(__name__)
 _model_registry: dict[str, dict[str, Any]] = {}
 _active_model_id: str | None = None
 
+# State file for loaded models (persisted across restarts)
+_STATE_FILE = os.path.join(os.getcwd(), "models", "loaded_models.json")
+
 
 class ModelService:
-    """Manages model files on disk and their lifecycle."""
+    """Manages model files on disk and their lifecycle.
+
+    Supports:
+    - Local model management (list, upload, delete, activate, convert)
+    - MQTT-driven model downloads from orchestrator (download_model)
+    - Multi-model type tracking: embedding, matching, pad
+    """
 
     def __init__(self) -> None:
         self._settings = get_settings()
         self._model_dir = Path(self._settings.model_dir)
         self._model_dir.mkdir(parents=True, exist_ok=True)
+        self._loaded_models: Dict[str, str] = {}  # {"embedding": "model.onnx", ...}
+        self._lock = threading.Lock()
+        self._load_state()
+
+    # -- State persistence (for MQTT-downloaded models) ----------------------
+
+    def _load_state(self) -> None:
+        """Load saved model state from disk."""
+        try:
+            if os.path.exists(_STATE_FILE):
+                with open(_STATE_FILE, "r") as f:
+                    self._loaded_models = json.load(f)
+                logger.info("Loaded model state: %s", self._loaded_models)
+        except Exception as exc:
+            logger.error("Failed to load model state: %s", exc)
+
+    def _save_state(self) -> None:
+        """Save current model state to disk."""
+        try:
+            os.makedirs(os.path.dirname(_STATE_FILE), exist_ok=True)
+            with open(_STATE_FILE, "w") as f:
+                json.dump(self._loaded_models, f, indent=2)
+        except Exception as exc:
+            logger.error("Failed to save model state: %s", exc)
+
+    @property
+    def loaded_models(self) -> Dict[str, str]:
+        """Return dict of loaded models by type: {type: name}."""
+        with self._lock:
+            return dict(self._loaded_models)
+
+    @property
+    def model_dir(self) -> str:
+        return str(self._model_dir)
 
     # -- scan / list ---------------------------------------------------------
 
@@ -187,6 +235,96 @@ class ModelService:
         if model_id not in _model_registry:
             await self.list_models()
         return _model_registry.get(model_id)
+
+    # -- download from orchestrator (MQTT-driven, sync) ----------------------
+
+    def download_model(
+        self,
+        model_type: str,
+        model_name: str,
+        version: str,
+        download_url: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """Download a model from orchestrator presigned URL.
+
+        Saves to: models/{model_type}/{model_name}
+        Returns (success, error_message).
+        """
+        save_dir = self._model_dir / model_type
+        save_path = save_dir / model_name
+
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+
+            logger.info(
+                "Downloading model: %s/%s → %s",
+                model_type, model_name, save_path,
+            )
+
+            response = requests.get(download_url, stream=True, timeout=300)
+            response.raise_for_status()
+
+            downloaded = 0
+            with open(str(save_path), "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+
+            file_size = save_path.stat().st_size
+            logger.info(
+                "✅ Model downloaded: %s/%s (%.1f MB)",
+                model_type, model_name, file_size / (1024 * 1024),
+            )
+
+            with self._lock:
+                self._loaded_models[model_type] = model_name
+                self._save_state()
+
+            return True, None
+
+        except requests.RequestException as exc:
+            error = "Download failed: {}".format(exc)
+            logger.error("❌ %s", error)
+            return False, error
+
+        except Exception as exc:
+            error = "Model save failed: {}".format(exc)
+            logger.error("❌ %s", error)
+            return False, error
+
+    def get_model_path_by_type(self, model_type: str) -> Optional[str]:
+        """Get the path to the loaded model for a given type.
+
+        Prefers TRT/engine files over ONNX.
+        """
+        with self._lock:
+            model_name = self._loaded_models.get(model_type)
+
+        type_dir = self._model_dir / model_type
+
+        if not model_name:
+            # Try to find any model file in the type directory
+            if not type_dir.is_dir():
+                return None
+            for f in sorted(type_dir.iterdir()):
+                if f.suffix in (".trt", ".engine"):
+                    return str(f)
+            for f in sorted(type_dir.iterdir()):
+                if f.suffix == ".onnx":
+                    return str(f)
+            return None
+
+        # Prefer TRT engine over ONNX
+        if model_name.endswith(".onnx"):
+            for ext in (".trt", ".engine"):
+                alt = type_dir / model_name.replace(".onnx", ext)
+                if alt.exists():
+                    return str(alt)
+
+        model_path = type_dir / model_name
+        if model_path.exists():
+            return str(model_path)
+        return None
 
 
 # ---------------------------------------------------------------------------
