@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
-from typing import Annotated
+try:
+    from typing import Annotated
+except ImportError:
+    from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 

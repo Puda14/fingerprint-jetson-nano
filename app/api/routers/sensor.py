@@ -7,7 +7,10 @@ import base64
 import json
 import logging
 import time
-from typing import Annotated
+try:
+    from typing import Annotated
+except ImportError:
+    from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
