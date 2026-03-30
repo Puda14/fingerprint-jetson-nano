@@ -29,7 +29,7 @@ from app.services.pipeline_service import PipelineService, get_pipeline_service
 from app.services.sensor_service import SensorService, get_sensor_service
 from app.services.system_service import SystemService, get_system_service
 
-router = APIRouter(tags=["system"])
+router = APIRouter(prefix="/system", tags=["system"])
 
 
 # ---------------------------------------------------------------------------
