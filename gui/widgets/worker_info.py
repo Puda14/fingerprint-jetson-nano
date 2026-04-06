@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QProgressBar,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -16,10 +17,11 @@ from PyQt5.QtWidgets import (
 def _card(title: str = "") -> QFrame:
     """Create a styled card frame."""
     frame = QFrame()
+    frame.setObjectName("info_card")
     frame.setProperty("class", "card")
     frame.setFrameShape(QFrame.StyledPanel)
     frame.setStyleSheet(
-        "QFrame { background-color: #161b22; border: 1px solid #30363d; "
+        "QFrame#info_card { background-color: #161b22; border: 1px solid #30363d; "
         "border-radius: 8px; padding: 16px; }"
     )
     return frame
@@ -56,7 +58,16 @@ class WorkerInfoWidget(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setSpacing(0)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
@@ -66,8 +77,9 @@ class WorkerInfoWidget(QWidget):
         layout.addWidget(title)
 
         # -- Row 1: Device + Model + Sensor info cards --
-        row1 = QHBoxLayout()
-        row1.setSpacing(12)
+        row1 = QGridLayout()
+        row1.setHorizontalSpacing(12)
+        row1.setVerticalSpacing(12)
 
         # Device card
         dev_card = _card()
@@ -85,7 +97,8 @@ class WorkerInfoWidget(QWidget):
         dev_layout.addWidget(self.lbl_hostname)
         dev_layout.addWidget(self.lbl_ip)
         dev_layout.addStretch()
-        row1.addWidget(dev_card)
+        dev_card.setMinimumWidth(240)
+        row1.addWidget(dev_card, 0, 0)
 
         # Model card
         model_card = _card()
@@ -103,7 +116,8 @@ class WorkerInfoWidget(QWidget):
         model_layout.addWidget(self.lbl_backend)
         model_layout.addWidget(self.lbl_model_status)
         model_layout.addStretch()
-        row1.addWidget(model_card)
+        model_card.setMinimumWidth(240)
+        row1.addWidget(model_card, 0, 1)
 
         # Sensor card
         sensor_card = _card()
@@ -121,13 +135,19 @@ class WorkerInfoWidget(QWidget):
         sensor_layout.addWidget(self.lbl_sensor_type)
         sensor_layout.addWidget(self.lbl_sensor_user_count)
         sensor_layout.addStretch()
-        row1.addWidget(sensor_card)
+        sensor_card.setMinimumWidth(240)
+        row1.addWidget(sensor_card, 0, 2)
+
+        row1.setColumnStretch(0, 1)
+        row1.setColumnStretch(1, 1)
+        row1.setColumnStretch(2, 1)
 
         layout.addLayout(row1)
 
         # -- Row 2: System metrics --
-        row2 = QHBoxLayout()
-        row2.setSpacing(12)
+        row2 = QGridLayout()
+        row2.setHorizontalSpacing(12)
+        row2.setVerticalSpacing(12)
 
         # CPU
         cpu_card = _card()
@@ -150,7 +170,8 @@ class WorkerInfoWidget(QWidget):
         cpu_layout.addWidget(self.bar_cpu)
         cpu_layout.addWidget(self.lbl_cpu_temp)
         cpu_layout.addStretch()
-        row2.addWidget(cpu_card)
+        cpu_card.setMinimumWidth(200)
+        row2.addWidget(cpu_card, 0, 0)
 
         # Memory
         mem_card = _card()
@@ -169,7 +190,8 @@ class WorkerInfoWidget(QWidget):
         mem_layout.addWidget(self.lbl_mem, alignment=Qt.AlignCenter)
         mem_layout.addWidget(self.bar_mem)
         mem_layout.addStretch()
-        row2.addWidget(mem_card)
+        mem_card.setMinimumWidth(200)
+        row2.addWidget(mem_card, 0, 1)
 
         # Disk
         disk_card = _card()
@@ -188,7 +210,8 @@ class WorkerInfoWidget(QWidget):
         disk_layout.addWidget(self.lbl_disk, alignment=Qt.AlignCenter)
         disk_layout.addWidget(self.bar_disk)
         disk_layout.addStretch()
-        row2.addWidget(disk_card)
+        disk_card.setMinimumWidth(200)
+        row2.addWidget(disk_card, 0, 2)
 
         # Uptime
         up_card = _card()
@@ -201,13 +224,20 @@ class WorkerInfoWidget(QWidget):
         up_layout.addWidget(up_h)
         up_layout.addWidget(self.lbl_uptime, alignment=Qt.AlignCenter)
         up_layout.addStretch()
-        row2.addWidget(up_card)
+        up_card.setMinimumWidth(200)
+        row2.addWidget(up_card, 0, 3)
+
+        row2.setColumnStretch(0, 1)
+        row2.setColumnStretch(1, 1)
+        row2.setColumnStretch(2, 1)
+        row2.setColumnStretch(3, 1)
 
         layout.addLayout(row2)
 
         # -- Row 3: Stats cards --
-        row3 = QHBoxLayout()
-        row3.setSpacing(12)
+        row3 = QGridLayout()
+        row3.setHorizontalSpacing(12)
+        row3.setVerticalSpacing(12)
 
         stats_items = [
             ("0", "Enrolled Users"),
@@ -219,13 +249,25 @@ class WorkerInfoWidget(QWidget):
         for val_text, label_text in stats_items:
             card = _card()
             card_layout = QVBoxLayout(card)
-            container, val_lbl, _ = _stat_widget(val_text, label_text)
+            stat_container, val_lbl, _ = _stat_widget(val_text, label_text)
             self.stat_values.append(val_lbl)
-            card_layout.addWidget(container)
-            row3.addWidget(card)
+            card_layout.addWidget(stat_container)
+            card.setMinimumWidth(180)
+            row3.addWidget(card, 0, len(self.stat_values) - 1)
+
+        for i in range(4):
+            row3.setColumnStretch(i, 1)
 
         layout.addLayout(row3)
         layout.addStretch()
+
+        scroll.setWidget(container)
+        root_layout.addWidget(scroll)
+        self._force_transparent_labels()
+
+    def _force_transparent_labels(self) -> None:
+        for label in self.findChildren(QLabel):
+            label.setAttribute(Qt.WA_TranslucentBackground, True)
 
     # -- update methods called by MainWindow when health data arrives ---------
 

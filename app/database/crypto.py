@@ -113,7 +113,20 @@ class CryptoService:
         # type: (bytes) -> list
         """Decrypt ciphertext bytes back to a float32 vector."""
         raw = self._fernet.decrypt(data)
-        return list(struct.unpack("<{}f".format(EMBEDDING_DIM), raw))
+        expected_bytes = EMBEDDING_DIM * 4
+        if len(raw) == expected_bytes:
+            return list(struct.unpack("<{}f".format(EMBEDDING_DIM), raw))
+
+        # Backward compatibility for pre-migration records (256-d vectors).
+        if len(raw) == 256 * 4 and EMBEDDING_DIM == 512:
+            legacy = list(struct.unpack("<256f", raw))
+            return legacy + [0.0] * 256
+
+        raise ValueError(
+            "Unexpected embedding bytes: expected {} bytes, got {}".format(
+                expected_bytes, len(raw)
+            )
+        )
 
     def encrypt_minutiae(self, minutiae):
         # type: (list) -> bytes

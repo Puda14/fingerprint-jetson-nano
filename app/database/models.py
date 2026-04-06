@@ -19,7 +19,7 @@ from typing import Any, Optional
 # Constants
 # ---------------------------------------------------------------------------
 
-EMBEDDING_DIM = 256
+EMBEDDING_DIM = 512
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ class VerificationDecision(str, Enum):
 
 @dataclass(frozen=True)
 class Embedding:
-    """256-dimensional float32 embedding vector (immutable)."""
+    """512-dimensional float32 embedding vector (immutable)."""
 
     values: tuple
 

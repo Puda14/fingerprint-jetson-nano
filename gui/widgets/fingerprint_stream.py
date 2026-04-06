@@ -9,12 +9,12 @@ import numpy as np
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -36,7 +36,16 @@ class FingerprintStreamWidget(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        layout = QHBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setSpacing(0)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QHBoxLayout(container)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
@@ -67,16 +76,19 @@ class FingerprintStreamWidget(QWidget):
         controls = QHBoxLayout()
         controls.setSpacing(8)
 
-        self.btn_start = QPushButton("▶  Start Stream")
+        self.btn_start = QPushButton("Start Stream")
         self.btn_start.setObjectName("btn_primary")
+        self.btn_start.setMinimumHeight(40)
         self.btn_start.clicked.connect(self._start_stream)
 
-        self.btn_stop = QPushButton("■  Stop")
+        self.btn_stop = QPushButton("Stop")
         self.btn_stop.setObjectName("btn_danger")
+        self.btn_stop.setMinimumHeight(40)
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self._stop_stream)
 
-        self.btn_capture = QPushButton("📷  Capture")
+        self.btn_capture = QPushButton("Capture")
+        self.btn_capture.setMinimumHeight(40)
         self.btn_capture.clicked.connect(self._single_capture)
 
         controls.addWidget(self.btn_start)
@@ -100,6 +112,7 @@ class FingerprintStreamWidget(QWidget):
 
         left.addStretch()
         layout.addLayout(left, stretch=2)
+        self.image_label.setMinimumSize(300, 300)
 
         # -- Right: Metrics panel --
         right = QVBoxLayout()
@@ -176,15 +189,25 @@ class FingerprintStreamWidget(QWidget):
 
         right.addStretch()
         layout.addLayout(right, stretch=1)
+        metrics_title.setMinimumWidth(280)
 
         # FPS calculation timer
         self._fps_calc_timer = QTimer(self)
         self._fps_calc_timer.timeout.connect(self._calc_fps)
 
+        scroll.setWidget(container)
+        root_layout.addWidget(scroll)
+        self._force_transparent_labels()
+
+    def _force_transparent_labels(self) -> None:
+        for label in self.findChildren(QLabel):
+            label.setAttribute(Qt.WA_TranslucentBackground, True)
+
     def _make_card(self) -> QFrame:
         card = QFrame()
+        card.setObjectName("stream_card")
         card.setStyleSheet(
-            "QFrame { background-color: #161b22; border: 1px solid #30363d; "
+            "QFrame#stream_card { background-color: #161b22; border: 1px solid #30363d; "
             "border-radius: 8px; padding: 12px; }"
         )
         return card

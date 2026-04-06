@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import time
@@ -11,7 +12,7 @@ try:
 except ImportError:
     from typing_extensions import Annotated
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.core.config import Settings, get_settings
 from app.api.schemas import (
@@ -39,7 +40,14 @@ async def verify(
     body: VerifyRequest,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
 ) -> ApiResponse[VerifyResponse]:
-    result = await pipeline.verify_1to1(user_id=int(body.user_id))
+    image_bytes = None
+    if body.image_base64:
+        try:
+            image_bytes = base64.b64decode(body.image_base64)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid image_base64: {exc}")
+
+    result = await pipeline.verify_1to1(user_id=int(body.user_id), image_bytes=image_bytes)
     return ApiResponse(
         success=True,
         data=VerifyResponse(
@@ -64,12 +72,19 @@ async def identify(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ApiResponse[IdentifyResponse]:
     start = time.perf_counter()
-    results = await pipeline.identify_1toN(top_k=body.top_k)
+    image_bytes = None
+    if body.image_base64:
+        try:
+            image_bytes = base64.b64decode(body.image_base64)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid image_base64: {exc}")
+
+    results = await pipeline.identify_1toN(top_k=body.top_k, image_bytes=image_bytes)
     latency = round((time.perf_counter() - start) * 1000, 2)
 
     candidates = [
         IdentifyCandidate(
-            user_id=r.user_id,
+            user_id=str(r.user_id),
             employee_id=r.employee_id,
             full_name=r.full_name,
             score=r.score,

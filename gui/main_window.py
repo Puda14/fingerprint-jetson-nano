@@ -5,7 +5,6 @@ import logging
 from typing import Optional
 
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
@@ -61,37 +60,32 @@ class MainWindow(QMainWindow):
         # -- Sidebar --
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(220)
+        sidebar.setFixedWidth(240)
         sidebar.setStyleSheet(
             "QWidget#sidebar { background-color: #161b22; "
             "border-right: 1px solid #30363d; }"
         )
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(12, 16, 12, 16)
-        sidebar_layout.setSpacing(4)
+        sidebar_layout.setContentsMargins(14, 20, 14, 20)
+        sidebar_layout.setSpacing(8)
 
         # App title
-        app_title = QLabel("🔒 FP Worker")
+        app_title = QLabel("FP Worker")
         app_title.setObjectName("app_title")
         app_title.setStyleSheet(
-            "color: #58a6ff; font-size: 18px; font-weight: 700; padding: 8px 4px 16px 4px;"
+            "color: #58a6ff; font-size: 20px; font-weight: 700; padding: 6px 6px 14px 6px;"
         )
         sidebar_layout.addWidget(app_title)
 
         # Navigation buttons
-        nav_items = [
-            ("📊", "Dashboard"),
-            ("📹", "Streaming"),
-            ("🔐", "Verify"),
-            ("📝", "Register"),
-        ]
+        nav_items = ["Dashboard", "Streaming", "Verify", "Register"]
 
         self.nav_buttons = []
         self.btn_group = QButtonGroup(self)
         self.btn_group.setExclusive(True)
 
-        for i, (icon, label) in enumerate(nav_items):
-            btn = QPushButton("  {}  {}".format(icon, label))
+        for i, label in enumerate(nav_items):
+            btn = QPushButton(label)
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(
@@ -101,10 +95,11 @@ class MainWindow(QMainWindow):
                     color: #8b949e;
                     border: none;
                     border-radius: 6px;
-                    padding: 10px 12px;
+                    padding: 12px 14px;
                     text-align: left;
-                    font-size: 14px;
-                    font-weight: 500;
+                    font-size: 15px;
+                    font-weight: 600;
+                    min-height: 40px;
                 }
                 QPushButton:hover {
                     background-color: #21262d;
@@ -155,16 +150,16 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet(
             "QStatusBar { background-color: #161b22; color: #8b949e; "
-            "border-top: 1px solid #30363d; font-size: 12px; padding: 2px 8px; }"
+            "border-top: 1px solid #30363d; font-size: 13px; padding: 4px 10px; }"
         )
         self.setStatusBar(self.status_bar)
 
-        self.status_connection = QLabel("⚪ Connecting...")
-        self.status_connection.setStyleSheet("color: #d29922; padding: 0 12px;")
+        self.status_connection = QLabel("Connecting...")
+        self.status_connection.setStyleSheet("color: #d29922; padding: 0 14px;")
         self.status_model = QLabel("Model: --")
-        self.status_model.setStyleSheet("color: #8b949e; padding: 0 12px;")
+        self.status_model.setStyleSheet("color: #8b949e; padding: 0 14px;")
         self.status_sensor = QLabel("Sensor: --")
-        self.status_sensor.setStyleSheet("color: #8b949e; padding: 0 12px;")
+        self.status_sensor.setStyleSheet("color: #8b949e; padding: 0 14px;")
 
         self.status_bar.addWidget(self.status_connection)
         self.status_bar.addWidget(self.status_model)
@@ -202,31 +197,44 @@ class MainWindow(QMainWindow):
 
         sensor = d.get("sensor_connected", False)
         if sensor:
-            self.status_sensor.setText("Sensor: ✅ Connected")
+            self.status_sensor.setText("Sensor: Connected")
             self.status_sensor.setStyleSheet("color: #3fb950; padding: 0 12px;")
         else:
-            self.status_sensor.setText("Sensor: ❌ Disconnected")
+            self.status_sensor.setText("Sensor: Disconnected")
             self.status_sensor.setStyleSheet("color: #f85149; padding: 0 12px;")
 
-    def _on_connection_change(self, connected: bool) -> None:
-        if connected:
-            self.status_connection.setText("🟢 Connected")
-            self.status_connection.setStyleSheet("color: #3fb950; padding: 0 12px;")
-        else:
-            self.status_connection.setText("🔴 Disconnected")
-            self.status_connection.setStyleSheet("color: #f85149; padding: 0 12px;")
+        # Keep dashboard counters fresh (users/fingers/latency cards).
+        self._refresh_dashboard_cards()
 
-    def _initial_load(self) -> None:
-        """Load additional data on startup."""
-        # Load stats
+    def _refresh_dashboard_cards(self) -> None:
+        """Refresh non-health dashboard data periodically."""
+        # Prevent spawning overlapping workers if a previous call is still running.
+        if hasattr(self, "_stats_worker") and self._stats_worker is not None and self._stats_worker.isRunning():
+            return
+
         self._stats_worker = ApiWorkerThread(self.client.get_stats)
         self._stats_worker.finished.connect(self.dashboard_page.update_stats)
         self._stats_worker.start()
 
-        # Load sensor info
+        if hasattr(self, "_sensor_worker") and self._sensor_worker is not None and self._sensor_worker.isRunning():
+            return
+
         self._sensor_worker = ApiWorkerThread(self.client.get_sensor_status)
         self._sensor_worker.finished.connect(self.dashboard_page.update_sensor)
         self._sensor_worker.start()
+
+    def _on_connection_change(self, connected: bool) -> None:
+        if connected:
+            self.status_connection.setText("Connected")
+            self.status_connection.setStyleSheet("color: #3fb950; padding: 0 12px;")
+        else:
+            self.status_connection.setText("Disconnected")
+            self.status_connection.setStyleSheet("color: #f85149; padding: 0 12px;")
+
+    def _initial_load(self) -> None:
+        """Load additional data on startup."""
+        # Load stats + sensor once immediately; afterwards refreshed in _on_health.
+        self._refresh_dashboard_cards()
 
         # Load config (for hostname/IP)
         self._config_worker = ApiWorkerThread(self.client.get_config)
@@ -242,4 +250,5 @@ class MainWindow(QMainWindow):
             self._health_poller.wait(2000)
 
         self.stream_page.cleanup()
+        self.verify_page.cleanup()
         event.accept()

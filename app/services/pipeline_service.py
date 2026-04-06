@@ -452,6 +452,7 @@ class PipelineService:
                     finger_index=finger,
                     embedding_list=embedding_list,
                     quality_score=quality,
+                    image_bytes=image_bytes,
                 )
             except Exception as exc:
                 logger.warning("Failed to publish enrollment event: %s", exc)
@@ -465,6 +466,15 @@ class PipelineService:
 
     # -- verification (1:1) -------------------------------------------------
 
+    @staticmethod
+    def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+        """Numerically stable cosine similarity for verification."""
+        na = float(np.linalg.norm(a))
+        nb = float(np.linalg.norm(b))
+        if na <= 1e-8 or nb <= 1e-8:
+            return 0.0
+        return float(np.dot(a, b) / (na * nb))
+
     async def verify_1to1(
         self,
         user_id: int,
@@ -473,6 +483,7 @@ class PipelineService:
         """1:1 verification against a specific user's stored embeddings."""
         start = time.perf_counter()
         threshold = self._settings.verify_threshold
+        margin = getattr(self._settings, "verify_margin", 0.0)
 
         # Capture image
         if image_bytes is None:
@@ -527,7 +538,7 @@ class PipelineService:
                 user_id=user_id, latency_ms=round(elapsed, 2),
             )
 
-        # Compare probe with each stored embedding, take best score
+        # Compare probe with selected user's embeddings, take best score.
         best_score = 0.0
         matched_fp_id = None
         for fp in fps:
@@ -542,14 +553,39 @@ class PipelineService:
                         "<{}f".format(EMBEDDING_DIM), fp.embedding_enc
                     ))
                 gallery_emb = np.array(gallery_vec, dtype=np.float32)
-                score = float(np.dot(probe_emb, gallery_emb))
+                score = self._cosine_similarity(probe_emb, gallery_emb)
                 if score > best_score:
                     best_score = score
                     matched_fp_id = fp.id
             except Exception as exc:
                 logger.warning("Failed to compare with fp_id=%s: %s", fp.id, exc)
 
+        # Anti false-positive gate: target score must be better than non-targets
+        # by at least verify_margin. This is useful when many users have high
+        # baseline similarity due model/domain mismatch.
+        best_non_target = -1.0
+        try:
+            all_active = await loop.run_in_executor(None, self._fp_repo.get_active_embeddings)
+            for fp_id, fp_user_id, embedding_enc in all_active:
+                if int(fp_user_id) == int(user_id):
+                    continue
+                if embedding_enc is None:
+                    continue
+                if self._crypto is not None:
+                    other_vec = self._crypto.decrypt_embedding(embedding_enc)
+                else:
+                    import struct
+                    other_vec = list(struct.unpack("<{}f".format(EMBEDDING_DIM), embedding_enc))
+                other_emb = np.array(other_vec, dtype=np.float32)
+                s = self._cosine_similarity(probe_emb, other_emb)
+                if s > best_non_target:
+                    best_non_target = s
+        except Exception as exc:
+            logger.warning("Failed to compute non-target scores: %s", exc)
+
         matched = best_score >= threshold
+        if best_non_target >= 0 and margin > 0:
+            matched = matched and (best_score - best_non_target >= margin)
         elapsed = (time.perf_counter() - start) * 1000
 
         # Log result
@@ -568,8 +604,8 @@ class PipelineService:
             await loop.run_in_executor(None, self._log_repo.create, log)
 
         logger.info(
-            "Verify 1:1: user=%d score=%.4f threshold=%.4f matched=%s (%.1fms)",
-            user_id, best_score, threshold, matched, elapsed,
+            "Verify 1:1: user=%d score=%.4f threshold=%.4f non_target=%.4f margin=%.4f matched=%s (%.1fms)",
+            user_id, best_score, threshold, best_non_target, margin, matched, elapsed,
         )
 
         return VerifyResult(
@@ -747,12 +783,14 @@ class PipelineService:
         finger_index: int,
         embedding_list: list[float],
         quality_score: float,
+        image_bytes: bytes | None = None,
     ) -> None:
         """Publish a new enrollment event to orchestrator via MQTT.
 
         Topic: worker/{device_id}/enrolled
         The orchestrator is responsible for broadcasting this to other workers.
         """
+        import base64
         import json
         try:
             from app.mqtt.client import get_mqtt_client
@@ -782,7 +820,15 @@ class PipelineService:
                 "embedding": embedding_list,
                 "quality_score": quality_score,
             },
+            "model": {
+                "name": self._active_model or "local",
+                "embedding_dim": len(embedding_list),
+            },
         }
+        if image_bytes:
+            payload["fingerprint"]["image_base64"] = base64.b64encode(image_bytes).decode("ascii")
+            payload["fingerprint"]["image_width"] = int(self._settings.image_width)
+            payload["fingerprint"]["image_height"] = int(self._settings.image_height)
         topic = "worker/{}/enrolled".format(self._settings.device_id)
         mqtt_client.publish(topic, json.dumps(payload), qos=1)
         logger.info("📤 Enrollment event published for user %s (fp_id=%d)",

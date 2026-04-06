@@ -6,6 +6,8 @@ __pycache__/
 dist/
 build/
 *.egg
+models/
+data/
 
 # Virtual environment
 venv/

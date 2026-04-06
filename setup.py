@@ -13,6 +13,7 @@ setup(
         "uvicorn[standard]>=0.27.0",
         "pydantic>=2.5.0",
         "pydantic-settings>=2.1.0",
+        "python-dateutil>=2.8.2",
         "cryptography>=41.0.0",
         "numpy>=1.24.0",
         "pillow>=10.0.0",

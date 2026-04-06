@@ -44,7 +44,7 @@ class SensorService:
         self,
         vid: int = 0x0483,
         pid: int = 0x5720,
-        sdk_path: str = "/opt/fingerprint-sdk",
+        sdk_path: str = "/home/yen/SDK-Fingerprint-sensor",
         use_mock: bool = False,
     ) -> bool:
         """Opens sensor connection. Returns True if real hardware connected."""

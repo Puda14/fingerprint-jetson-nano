@@ -7,9 +7,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, ConfigDict
 # ---------------------------------------------------------------------------
 
 DataT = TypeVar("DataT")
+RoleLiteral = Literal["user", "admin", "superadmin"]
 
 
 class ApiResponse(BaseModel, Generic[DataT]):
@@ -64,13 +65,27 @@ class UserCreate(BaseModel):
     employee_id: str = Field(..., min_length=1, max_length=50)
     full_name: str = Field(..., min_length=1, max_length=200)
     department: str = Field(default="", max_length=100)
-    role: str = Field(default="employee", max_length=50)
+    role: RoleLiteral = Field(default="user")
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, value):
+        if value == "employee":
+            return "user"
+        return value
 
 
 class UserUpdate(BaseModel):
     full_name: str | None = None
     department: str | None = None
-    role: str | None = None
+    role: RoleLiteral | None = None
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, value):
+        if value == "employee":
+            return "user"
+        return value
 
 
 class EnrolledFinger(BaseModel):
@@ -86,6 +101,7 @@ class UserResponse(BaseModel):
     department: str
     role: str
     is_active: bool = True
+    fingerprint_count: int = 0
     enrolled_fingers: list[EnrolledFinger] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -131,6 +147,7 @@ class EnrollResponse(BaseModel):
 
 class VerifyRequest(BaseModel):
     user_id: str
+    image_base64: str | None = None
 
 
 class VerifyResponse(BaseModel):
@@ -143,6 +160,7 @@ class VerifyResponse(BaseModel):
 
 class IdentifyRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
+    image_base64: str | None = None
 
 
 class IdentifyCandidate(BaseModel):

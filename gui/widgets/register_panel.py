@@ -1,9 +1,14 @@
 """Registration page: create users and enroll fingerprints."""
 
 
-from PyQt5.QtCore import Qt
+import base64
+
+import numpy as np
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
     QComboBox,
+    QDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -11,14 +16,154 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from gui.api_client import ApiClient, ApiWorkerThread
+from gui.api_client import ApiClient, ApiWorkerThread, StreamThread
+
+
+class EnrollStreamDialog(QDialog):
+    """Modal preview dialog to align finger before enrollment."""
+
+    def __init__(self, ws_url: str, parent=None) -> None:
+        super().__init__(parent)
+        self.ws_url = ws_url
+        self._stream_thread = None
+        self._has_finger = False
+        self._quality = 0.0
+        self._build_ui()
+        self._start_stream()
+
+    @property
+    def quality(self) -> float:
+        return self._quality
+
+    def _build_ui(self) -> None:
+        self.setWindowTitle("Fingerprint Preview")
+        self.setModal(True)
+        self.resize(520, 620)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(12)
+
+        title = QLabel("Dat ngon tay len sensor truoc khi enroll")
+        title.setStyleSheet("color: #c9d1d9; font-size: 15px; font-weight: 700;")
+        root.addWidget(title)
+
+        self.image_label = QLabel("Waiting for stream...")
+        self.image_label.setFixedSize(420, 420)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet(
+            "QLabel { background-color: #161b22; border: 2px solid #30363d; "
+            "border-radius: 8px; color: #8b949e; }"
+        )
+        root.addWidget(self.image_label, alignment=Qt.AlignCenter)
+
+        self.lbl_finger = QLabel("Finger: No")
+        self.lbl_finger.setStyleSheet("color: #f85149; font-size: 13px; font-weight: 700;")
+        root.addWidget(self.lbl_finger)
+
+        self.lbl_quality = QLabel("Quality: 0.0")
+        self.lbl_quality.setStyleSheet("color: #8b949e; font-size: 13px;")
+        root.addWidget(self.lbl_quality)
+
+        self.bar_quality = QProgressBar()
+        self.bar_quality.setRange(0, 100)
+        self.bar_quality.setValue(0)
+        self.bar_quality.setTextVisible(False)
+        self.bar_quality.setFixedHeight(10)
+        root.addWidget(self.bar_quality)
+
+        btns = QHBoxLayout()
+        self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel.clicked.connect(self.reject)
+        self.btn_confirm = QPushButton("Start Enroll")
+        self.btn_confirm.setObjectName("btn_accent")
+        self.btn_confirm.setEnabled(False)
+        self.btn_confirm.clicked.connect(self.accept)
+        btns.addStretch()
+        btns.addWidget(self.btn_cancel)
+        btns.addWidget(self.btn_confirm)
+        root.addLayout(btns)
+
+    def _start_stream(self) -> None:
+        if self._stream_thread and self._stream_thread.isRunning():
+            return
+        self._stream_thread = StreamThread(self.ws_url, fps=8)
+        self._stream_thread.frame_received.connect(self._on_frame)
+        self._stream_thread.start()
+
+    def _stop_stream(self) -> None:
+        if self._stream_thread:
+            self._stream_thread.stop()
+            self._stream_thread.wait(2000)
+            self._stream_thread = None
+
+    def _on_frame(self, frame_data: dict) -> None:
+        b64 = frame_data.get("image_base64", "")
+        width = frame_data.get("width", 192)
+        height = frame_data.get("height", 192)
+        self._quality = float(frame_data.get("quality_score", 0) or 0)
+        self._has_finger = bool(frame_data.get("has_finger", False))
+
+        self.lbl_quality.setText("Quality: {:.1f}".format(self._quality))
+        self.bar_quality.setValue(max(0, min(100, int(self._quality))))
+
+        if self._has_finger:
+            self.lbl_finger.setText("Finger: Yes")
+            self.lbl_finger.setStyleSheet("color: #3fb950; font-size: 13px; font-weight: 700;")
+        else:
+            self.lbl_finger.setText("Finger: No")
+            self.lbl_finger.setStyleSheet("color: #f85149; font-size: 13px; font-weight: 700;")
+
+        self.btn_confirm.setEnabled(self._has_finger and self._quality >= 30)
+
+        if not b64:
+            return
+
+        try:
+            img_bytes = base64.b64decode(b64)
+            img_array = np.frombuffer(img_bytes, dtype=np.uint8)
+
+            if len(img_array) == width * height:
+                img_array = img_array.reshape((height, width))
+                qimg = QImage(
+                    img_array.data, width, height, width, QImage.Format_Grayscale8
+                )
+            else:
+                img_array = img_array.reshape((height, width, 3))
+                qimg = QImage(
+                    img_array.data, width, height, width * 3, QImage.Format_RGB888
+                )
+
+            pixmap = QPixmap.fromImage(qimg)
+            scaled = pixmap.scaled(
+                self.image_label.size(),
+                Qt.KeepAspectRatio,
+                Qt.FastTransformation,
+            )
+            self.image_label.setPixmap(scaled)
+            self.image_label.setStyleSheet(
+                "QLabel { background-color: #161b22; border: 2px solid #3fb950; "
+                "border-radius: 8px; }"
+            )
+        except Exception:
+            pass
+
+    def closeEvent(self, event) -> None:
+        self._stop_stream()
+        super().closeEvent(event)
+
+    def done(self, result: int) -> None:
+        self._stop_stream()
+        super().done(result)
 
 
 class RegisterPanelWidget(QWidget):
@@ -27,11 +172,26 @@ class RegisterPanelWidget(QWidget):
     def __init__(self, api_client: ApiClient, parent=None) -> None:
         super().__init__(parent)
         self.client = api_client
+        self.ws_stream_url = self.client.base_url.replace("http://", "ws://").replace(
+            "https://", "wss://"
+        ) + "/sensor/stream"
         self._worker = None
+        self._enroll_status_timer = QTimer(self)
+        self._enroll_status_timer.setSingleShot(True)
+        self._enroll_status_timer.timeout.connect(self._reset_enroll_status)
         self._build_ui()
 
     def _build_ui(self) -> None:
-        layout = QHBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setSpacing(0)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QHBoxLayout(container)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
@@ -68,12 +228,12 @@ class RegisterPanelWidget(QWidget):
         form_layout.addRow("Department:", self.inp_department)
 
         self.cmb_role = QComboBox()
-        self.cmb_role.addItems(["employee", "admin", "superadmin"])
+        self.cmb_role.addItems(["user", "admin", "superadmin"])
         form_layout.addRow("Role:", self.cmb_role)
 
         form_outer.addLayout(form_layout)
 
-        self.btn_create = QPushButton("➕  Create User")
+        self.btn_create = QPushButton("Create User")
         self.btn_create.setObjectName("btn_primary")
         self.btn_create.clicked.connect(self._do_create_user)
         form_outer.addWidget(self.btn_create)
@@ -104,6 +264,7 @@ class RegisterPanelWidget(QWidget):
 
         self.cmb_enroll_user = QComboBox()
         e_layout.addWidget(self.cmb_enroll_user)
+        self.cmb_enroll_user.currentIndexChanged.connect(self._reset_enroll_status)
 
         # Finger selector
         fng_lbl = QLabel("Finger:")
@@ -118,10 +279,11 @@ class RegisterPanelWidget(QWidget):
         self.cmb_finger.addItems(fingers)
         self.cmb_finger.setCurrentIndex(1)  # right_index default
         e_layout.addWidget(self.cmb_finger)
+        self.cmb_finger.currentIndexChanged.connect(self._reset_enroll_status)
 
         e_layout.addSpacing(8)
 
-        self.btn_enroll = QPushButton("🖐  Enroll Finger")
+        self.btn_enroll = QPushButton("Enroll Finger")
         self.btn_enroll.setObjectName("btn_accent")
         self.btn_enroll.clicked.connect(self._do_enroll)
         e_layout.addWidget(self.btn_enroll)
@@ -147,6 +309,8 @@ class RegisterPanelWidget(QWidget):
         left.addStretch()
 
         layout.addLayout(left, stretch=1)
+        form_card.setMinimumWidth(360)
+        enroll_card.setMinimumWidth(360)
 
         # -- Right: User list table --
         right = QVBoxLayout()
@@ -157,7 +321,7 @@ class RegisterPanelWidget(QWidget):
         list_title.setStyleSheet("color: #58a6ff; font-size: 18px; font-weight: 700;")
         list_header.addWidget(list_title)
 
-        self.btn_refresh = QPushButton("🔄  Refresh")
+        self.btn_refresh = QPushButton("Refresh")
         self.btn_refresh.clicked.connect(self.refresh_users)
         list_header.addWidget(self.btn_refresh)
         list_header.addStretch()
@@ -169,17 +333,20 @@ class RegisterPanelWidget(QWidget):
             ["Employee ID", "Full Name", "Department", "Role", "Fingers", "User ID"]
         )
         self.table_users.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_users.setMinimumWidth(560)
         self.table_users.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_users.setEditTriggers(QTableWidget.NoEditTriggers)
         right.addWidget(self.table_users)
 
         # Delete user button
-        self.btn_delete = QPushButton("🗑  Delete Selected User")
+        self.btn_delete = QPushButton("Delete Selected User")
         self.btn_delete.setObjectName("btn_danger")
         self.btn_delete.clicked.connect(self._do_delete_user)
         right.addWidget(self.btn_delete, alignment=Qt.AlignLeft)
 
         layout.addLayout(right, stretch=2)
+        scroll.setWidget(container)
+        root_layout.addWidget(scroll)
 
     def _make_card(self) -> QFrame:
         card = QFrame()
@@ -190,6 +357,15 @@ class RegisterPanelWidget(QWidget):
         return card
 
     # -- actions -------------------------------------------------------------
+
+    def _reset_enroll_status(self) -> None:
+        self.lbl_enroll_result.setText("Ready to enroll")
+        self.lbl_enroll_result.setStyleSheet("color: #8b949e; font-size: 14px;")
+        self.lbl_enroll_quality.setText("")
+        self.enroll_result_frame.setStyleSheet(
+            "QFrame { background-color: #21262d; border: 1px solid #30363d; "
+            "border-radius: 8px; padding: 12px; }"
+        )
 
     def refresh_users(self) -> None:
         self._worker = ApiWorkerThread(self.client.list_users)
@@ -215,9 +391,12 @@ class RegisterPanelWidget(QWidget):
             self.table_users.setItem(
                 row, 3, QTableWidgetItem(u.get("role", ""))
             )
-            fingers = u.get("enrolled_fingers", [])
+            fingers_count = int(u.get("fingerprint_count", 0) or 0)
+            if fingers_count <= 0:
+                fingers = u.get("enrolled_fingers", [])
+                fingers_count = len(fingers)
             self.table_users.setItem(
-                row, 4, QTableWidgetItem(str(len(fingers)))
+                row, 4, QTableWidgetItem(str(fingers_count))
             )
             self.table_users.setItem(
                 row, 5, QTableWidgetItem(u.get("id", ""))
@@ -274,6 +453,7 @@ class RegisterPanelWidget(QWidget):
             self.lbl_create_status.setStyleSheet("color: #f85149;")
 
     def _do_enroll(self) -> None:
+        self._enroll_status_timer.stop()
         idx = self.cmb_enroll_user.currentIndex()
         if idx < 0:
             self.lbl_enroll_result.setText("No user selected")
@@ -283,10 +463,18 @@ class RegisterPanelWidget(QWidget):
         user_id = self.cmb_enroll_user.currentData()
         finger = self.cmb_finger.currentText()
 
+        preview = EnrollStreamDialog(self.ws_stream_url, parent=self)
+        if preview.exec_() != QDialog.Accepted:
+            self.lbl_enroll_result.setText("Enrollment cancelled")
+            self.lbl_enroll_result.setStyleSheet("color: #8b949e; font-size: 14px;")
+            self.lbl_enroll_quality.setText("")
+            self._enroll_status_timer.start(1800)
+            return
+
         self.btn_enroll.setEnabled(False)
-        self.lbl_enroll_result.setText("Enrolling... Place finger on sensor")
+        self.lbl_enroll_result.setText("Enrolling... keep finger still on sensor")
         self.lbl_enroll_result.setStyleSheet("color: #d29922; font-size: 14px;")
-        self.lbl_enroll_quality.setText("")
+        self.lbl_enroll_quality.setText("Preview quality: {:.1f}".format(preview.quality))
 
         self._worker = ApiWorkerThread(
             self.client.enroll_finger, user_id, finger
@@ -313,6 +501,7 @@ class RegisterPanelWidget(QWidget):
                 "border-radius: 8px; padding: 12px; }"
             )
             self.refresh_users()
+            self._enroll_status_timer.start(3500)
         else:
             error = result.get("error", data.get("message", "Enrollment failed"))
             self.lbl_enroll_result.setText("Error: {}".format(error))
@@ -321,6 +510,7 @@ class RegisterPanelWidget(QWidget):
                 "QFrame { background-color: #3d0b0b; border: 2px solid #f85149; "
                 "border-radius: 8px; padding: 12px; }"
             )
+            self._enroll_status_timer.start(5000)
 
     def _do_delete_user(self) -> None:
         row = self.table_users.currentRow()
@@ -351,4 +541,5 @@ class RegisterPanelWidget(QWidget):
         self._worker.start()
 
     def _on_user_deleted(self, result: dict) -> None:
+        self._reset_enroll_status()
         self.refresh_users()

@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     image_width: int = 192
     image_height: int = 192
     knn_k: int = 16                # number of neighbors in graph builder
-    embedding_dim: int = 256       # embedding vector dimension
+    embedding_dim: int = 512       # embedding vector dimension
     extractor: str = "cn"          # minutiae extraction method: "cn" | "fingernet"
     fingernet_model_path: str = "" # ONNX path if using FingerNet
     clahe_clip: float = 2.5        # CLAHE clip level for preprocessing (0–8)
@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     verify_threshold: float = Field(
         default=0.55,
         description="Cosine similarity threshold for 1:1 verification",
+    )
+    verify_margin: float = Field(
+        default=0.02,
+        description="Minimum margin between target score and best non-target score",
     )
     identify_threshold: float = Field(
         default=0.50,
@@ -106,7 +110,7 @@ class Settings(BaseSettings):
         return v
 
     sensor_sdk_path: str = Field(
-        default="/opt/fingerprint-sdk",
+        default="/home/yen/SDK-Fingerprint-sensor",
         description="Path to sensor SDK",
     )
     mock_mode: bool = Field(

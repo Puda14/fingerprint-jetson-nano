@@ -196,6 +196,7 @@ def _to_user_response(user: dict) -> UserResponse:
         department=user.get("department", ""),
         role=user.get("role", "user"),
         is_active=user.get("is_active", True),
+        fingerprint_count=int(user.get("fingerprint_count", 0) or 0),
         enrolled_fingers=[],
         created_at=_parse_dt(user.get("created_at")),
         updated_at=_parse_dt(user.get("updated_at")),

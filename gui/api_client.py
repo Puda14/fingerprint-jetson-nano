@@ -38,6 +38,10 @@ class ApiClient:
             )
             resp.raise_for_status()
             return resp.json()
+        except requests.HTTPError as exc:
+            msg = self._extract_error_message(exc)
+            logger.error("GET %s failed: %s", path, msg)
+            return {"success": False, "error": msg}
         except Exception as exc:
             logger.error("GET %s failed: %s", path, exc)
             return {"success": False, "error": str(exc)}
@@ -51,6 +55,10 @@ class ApiClient:
             )
             resp.raise_for_status()
             return resp.json()
+        except requests.HTTPError as exc:
+            msg = self._extract_error_message(exc)
+            logger.error("POST %s failed: %s", path, msg)
+            return {"success": False, "error": msg}
         except Exception as exc:
             logger.error("POST %s failed: %s", path, exc)
             return {"success": False, "error": str(exc)}
@@ -63,9 +71,33 @@ class ApiClient:
             )
             resp.raise_for_status()
             return resp.json()
+        except requests.HTTPError as exc:
+            msg = self._extract_error_message(exc)
+            logger.error("DELETE %s failed: %s", path, msg)
+            return {"success": False, "error": msg}
         except Exception as exc:
             logger.error("DELETE %s failed: %s", path, exc)
             return {"success": False, "error": str(exc)}
+
+    @staticmethod
+    def _extract_error_message(exc: Exception) -> str:
+        response = getattr(exc, "response", None)
+        if response is not None:
+            try:
+                data = response.json()
+                if isinstance(data, dict):
+                    detail = data.get("detail")
+                    error = data.get("error")
+                    if detail:
+                        return str(detail)
+                    if error:
+                        return str(error)
+            except Exception:
+                pass
+            text = (response.text or "").strip()
+            if text:
+                return text
+        return str(exc)
 
     # -- system --------------------------------------------------------------
 
@@ -104,7 +136,7 @@ class ApiClient:
         employee_id: str,
         full_name: str,
         department: str = "",
-        role: str = "employee",
+        role: str = "user",
     ) -> Dict[str, Any]:
         return self._post(
             "/users",
@@ -120,7 +152,7 @@ class ApiClient:
         self, user_id: str, finger: str = "right_index", num_samples: int = 3
     ) -> Dict[str, Any]:
         return self._post(
-            "/users/{}/enroll".format(user_id),
+            "/users/{}/enroll-finger".format(user_id),
             {"finger": finger, "num_samples": num_samples},
         )
 
@@ -129,11 +161,17 @@ class ApiClient:
 
     # -- verification --------------------------------------------------------
 
-    def verify(self, user_id: str) -> Dict[str, Any]:
-        return self._post("/verify", {"user_id": user_id})
+    def verify(self, user_id: str, image_base64: Optional[str] = None) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"user_id": user_id}
+        if image_base64:
+            payload["image_base64"] = image_base64
+        return self._post("/verify", payload)
 
-    def identify(self, top_k: int = 5) -> Dict[str, Any]:
-        return self._post("/identify", {"top_k": top_k})
+    def identify(self, top_k: int = 5, image_base64: Optional[str] = None) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"top_k": top_k}
+        if image_base64:
+            payload["image_base64"] = image_base64
+        return self._post("/identify", payload)
 
     # -- models --------------------------------------------------------------
 

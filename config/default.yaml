@@ -9,6 +9,7 @@
 # ---------------------------------------------------------------------------
 verification:
   verify_threshold: 0.55 # cosine similarity threshold for 1:1 verify
+  verify_margin: 0.02 # required gap vs best non-target score to accept 1:1 verify
   identify_threshold: 0.50 # cosine similarity threshold for 1:N identify
   identify_top_k: 5 # max candidates returned in identify
   max_failed_attempts: 3 # lock after N consecutive failed attempts
@@ -33,7 +34,7 @@ index:
 # ---------------------------------------------------------------------------
 model:
   model_path: "models/mdgtv2_fp16.engine"
-  embedding_dim: 256
+  embedding_dim: 512
   image_width: 192
   image_height: 192
   batch_size: 1

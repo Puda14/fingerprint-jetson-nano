@@ -149,6 +149,31 @@ class VerificationPipeline:
     # Core pipeline
     # ------------------------------------------------------------------
 
+    def _fit_embedding_dim(self, embedding: np.ndarray) -> np.ndarray:
+        """Force embedding length to configured dimension for DB/index compatibility."""
+        if embedding.ndim != 1:
+            embedding = embedding.reshape(-1)
+
+        if embedding.shape[0] == self._embedding_dim:
+            return embedding.astype(np.float32)
+
+        if embedding.shape[0] > self._embedding_dim:
+            logger.warning(
+                "Embedding dimension %d is larger than configured %d; truncating.",
+                embedding.shape[0],
+                self._embedding_dim,
+            )
+            return embedding[: self._embedding_dim].astype(np.float32)
+
+        logger.warning(
+            "Embedding dimension %d is smaller than configured %d; zero-padding.",
+            embedding.shape[0],
+            self._embedding_dim,
+        )
+        padded = np.zeros(self._embedding_dim, dtype=np.float32)
+        padded[: embedding.shape[0]] = embedding.astype(np.float32)
+        return padded
+
     async def extract_embedding(
         self, image: bytes
     ) -> tuple[np.ndarray, dict[str, Any]]:
@@ -172,6 +197,16 @@ class VerificationPipeline:
             self._image_height,
         )
         self._profiler.stop("preprocessing")
+
+        # Some ONNX models consume image tensors directly (NCHW). In that case,
+        # skip minutiae/graph stages and infer straight from the preprocessed image.
+        if isinstance(self._backend, ONNXBackend) and self._backend.expects_image_input:
+            self._profiler.start("inference")
+            embedding = await loop.run_in_executor(
+                None, self._backend.infer_image, preprocessed
+            )
+            self._profiler.stop("inference")
+            return self._fit_embedding_dim(embedding), self._profiler.get_report()
 
         # Step 2: Minutiae extraction
         self._profiler.start("minutiae_extraction")
@@ -199,7 +234,7 @@ class VerificationPipeline:
         )
         self._profiler.stop("inference")
 
-        return embedding, self._profiler.get_report()
+        return self._fit_embedding_dim(embedding), self._profiler.get_report()
 
     async def verify(
         self,

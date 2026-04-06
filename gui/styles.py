@@ -2,30 +2,39 @@
 
 DARK_THEME = """
 /* ========== Global ========== */
-QMainWindow, QWidget {
+QMainWindow {
     background-color: #0d1117;
+}
+
+QWidget {
     color: #c9d1d9;
     font-family: "Segoe UI", "Noto Sans", "Liberation Sans", sans-serif;
-    font-size: 13px;
+    font-size: 14px;
+    background-color: transparent;
+}
+
+QLabel {
+    background-color: transparent;
+    border: none;
 }
 
 /* ========== Sidebar ========== */
 #sidebar {
     background-color: #161b22;
     border-right: 1px solid #30363d;
-    min-width: 200px;
-    max-width: 200px;
+    min-width: 240px;
+    max-width: 240px;
 }
 
 #sidebar QPushButton {
     background-color: transparent;
-    color: #8b949e;
+    color: #a8b3bf;
     border: none;
     border-radius: 6px;
-    padding: 10px 16px;
+    padding: 12px 16px;
     text-align: left;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
 }
 
 #sidebar QPushButton:hover {
@@ -93,12 +102,12 @@ QMainWindow, QWidget {
 /* ========== Buttons ========== */
 QPushButton {
     background-color: #21262d;
-    color: #c9d1d9;
+    color: #e6edf3;
     border: 1px solid #30363d;
     border-radius: 6px;
-    padding: 8px 16px;
+    padding: 10px 16px;
     font-weight: 600;
-    min-height: 32px;
+    min-height: 36px;
 }
 
 QPushButton:hover {
@@ -150,12 +159,16 @@ QPushButton#btn_accent:hover {
 
 /* ========== Inputs ========== */
 QLineEdit, QSpinBox, QComboBox {
-    background-color: #0d1117;
-    color: #c9d1d9;
+    background-color: #0f1621;
+    color: #e6edf3;
     border: 1px solid #30363d;
     border-radius: 6px;
-    padding: 8px 12px;
-    min-height: 28px;
+    padding: 9px 12px;
+    min-height: 32px;
+}
+
+QLineEdit::placeholder {
+    color: #7d8590;
 }
 
 QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
@@ -169,15 +182,15 @@ QComboBox::drop-down {
 
 QComboBox QAbstractItemView {
     background-color: #161b22;
-    color: #c9d1d9;
+    color: #e6edf3;
     border: 1px solid #30363d;
     selection-background-color: #1f6feb;
 }
 
 /* ========== Tables ========== */
 QTableWidget {
-    background-color: #0d1117;
-    color: #c9d1d9;
+    background-color: #0f1621;
+    color: #e6edf3;
     border: 1px solid #30363d;
     border-radius: 6px;
     gridline-color: #21262d;
@@ -185,17 +198,17 @@ QTableWidget {
 }
 
 QTableWidget::item {
-    padding: 6px 8px;
+    padding: 8px 10px;
 }
 
 QHeaderView::section {
     background-color: #161b22;
-    color: #8b949e;
+    color: #b8c1cb;
     border: none;
     border-bottom: 1px solid #30363d;
-    padding: 8px;
-    font-weight: 600;
-    font-size: 12px;
+    padding: 10px;
+    font-weight: 700;
+    font-size: 13px;
     text-transform: uppercase;
 }
 
@@ -252,7 +265,7 @@ QStatusBar {
     background-color: #161b22;
     color: #8b949e;
     border-top: 1px solid #30363d;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 /* ========== Group Box ========== */
