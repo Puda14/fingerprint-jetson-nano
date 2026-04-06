@@ -8,7 +8,9 @@ using the actual AI pipeline (preprocessing → minutiae → graph → inference
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -116,6 +118,8 @@ class PipelineService:
         self._fp_repo: FingerprintRepository | None = None
         self._log_repo: VerificationLogRepository | None = None
         self._crypto: CryptoService | None = None
+        self._sync_lock = threading.Lock()
+        self._sync_state_file = Path(self._settings.data_dir) / ".enrollment_sync_state.json"
 
     # -- singleton access ----------------------------------------------------
 
@@ -776,7 +780,85 @@ class PipelineService:
 
     # -- upstream MQTT publish -----------------------------------------------
 
-    def _publish_enrollment_event(
+    def _load_sync_state(self) -> dict[str, Any]:
+        if not self._sync_state_file.exists():
+            return {"synced_fp_ids": [], "pending_events": []}
+        try:
+            data = json.loads(self._sync_state_file.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return {"synced_fp_ids": [], "pending_events": []}
+            data.setdefault("synced_fp_ids", [])
+            data.setdefault("pending_events", [])
+            return data
+        except Exception as exc:
+            logger.warning("Failed to read enrollment sync state: %s", exc)
+            return {"synced_fp_ids": [], "pending_events": []}
+
+    def _save_sync_state(self, state: dict[str, Any]) -> None:
+        try:
+            self._sync_state_file.parent.mkdir(parents=True, exist_ok=True)
+            self._sync_state_file.write_text(
+                json.dumps(state, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            logger.warning("Failed to save enrollment sync state: %s", exc)
+
+    @staticmethod
+    def _payload_fp_id(payload: dict[str, Any]) -> int | None:
+        try:
+            fp = payload.get("fingerprint", {})
+            fp_id = fp.get("fp_id")
+            return int(fp_id) if fp_id is not None else None
+        except Exception:
+            return None
+
+    def _mark_fp_synced(self, fp_id: int) -> None:
+        with self._sync_lock:
+            state = self._load_sync_state()
+            synced = {int(x) for x in state.get("synced_fp_ids", [])}
+            synced.add(int(fp_id))
+            # Remove pending event for this fp_id if present
+            pending = []
+            for ev in state.get("pending_events", []):
+                if self._payload_fp_id(ev) != int(fp_id):
+                    pending.append(ev)
+            state["synced_fp_ids"] = sorted(synced)
+            state["pending_events"] = pending
+            self._save_sync_state(state)
+
+    def _queue_pending_event(self, payload: dict[str, Any]) -> None:
+        fp_id = self._payload_fp_id(payload)
+        with self._sync_lock:
+            state = self._load_sync_state()
+            pending = state.get("pending_events", [])
+
+            # De-duplicate by fingerprint id
+            replaced = False
+            if fp_id is not None:
+                for i, ev in enumerate(pending):
+                    if self._payload_fp_id(ev) == fp_id:
+                        pending[i] = payload
+                        replaced = True
+                        break
+            if not replaced:
+                pending.append(payload)
+
+            state["pending_events"] = pending
+            self._save_sync_state(state)
+
+    def _get_mqtt_client_if_connected(self):
+        try:
+            from app.mqtt.client import get_mqtt_client
+
+            mqtt_client = get_mqtt_client()
+        except Exception:
+            return None
+        if not mqtt_client.is_connected:
+            return None
+        return mqtt_client
+
+    def _build_enrollment_payload(
         self,
         user_obj: Any,
         fp_id: int,
@@ -784,24 +866,8 @@ class PipelineService:
         embedding_list: list[float],
         quality_score: float,
         image_bytes: bytes | None = None,
-    ) -> None:
-        """Publish a new enrollment event to orchestrator via MQTT.
-
-        Topic: worker/{device_id}/enrolled
-        The orchestrator is responsible for broadcasting this to other workers.
-        """
+    ) -> dict[str, Any]:
         import base64
-        import json
-        try:
-            from app.mqtt.client import get_mqtt_client
-            mqtt_client = get_mqtt_client()
-        except Exception:
-            logger.debug("MQTT client not available, skipping enrollment publish.")
-            return
-
-        if not mqtt_client.is_connected:
-            logger.debug("MQTT not connected, skipping enrollment publish.")
-            return
 
         user_dict = user_obj.to_dict() if hasattr(user_obj, "to_dict") else {}
         payload = {
@@ -826,13 +892,145 @@ class PipelineService:
             },
         }
         if image_bytes:
-            payload["fingerprint"]["image_base64"] = base64.b64encode(image_bytes).decode("ascii")
+            payload["fingerprint"]["image_base64"] = base64.b64encode(image_bytes).decode(
+                "ascii"
+            )
             payload["fingerprint"]["image_width"] = int(self._settings.image_width)
             payload["fingerprint"]["image_height"] = int(self._settings.image_height)
+        return payload
+
+    def sync_offline_enrollments(self) -> int:
+        """Queue unsynced local enrollments and flush them if MQTT is connected.
+
+        Returns:
+            Number of enrollment events published in this run.
+        """
+        if self._fp_repo is None or self._user_repo is None:
+            return 0
+
+        # Step 1: discover local unsynced fingerprints and queue them.
+        with self._sync_lock:
+            state = self._load_sync_state()
+            synced = {int(x) for x in state.get("synced_fp_ids", [])}
+            pending = state.get("pending_events", [])
+            pending_ids = {
+                self._payload_fp_id(ev)
+                for ev in pending
+                if self._payload_fp_id(ev) is not None
+            }
+
+            for fp_id, user_id, embedding_enc in self._fp_repo.get_active_embeddings():
+                if fp_id in synced or fp_id in pending_ids:
+                    continue
+
+                fp_obj = self._fp_repo.get_by_id(fp_id)
+                user_obj = self._user_repo.get_by_id(user_id)
+                if fp_obj is None or user_obj is None or embedding_enc is None:
+                    continue
+
+                try:
+                    if self._crypto is not None:
+                        embedding_list = self._crypto.decrypt_embedding(embedding_enc)
+                    else:
+                        import struct
+
+                        embedding_list = list(
+                            struct.unpack("<{}f".format(EMBEDDING_DIM), embedding_enc)
+                        )
+                except Exception as exc:
+                    logger.warning("Skip sync fp_id=%d: decode embedding failed (%s)", fp_id, exc)
+                    continue
+
+                payload = self._build_enrollment_payload(
+                    user_obj=user_obj,
+                    fp_id=fp_id,
+                    finger_index=fp_obj.finger_index,
+                    embedding_list=embedding_list,
+                    quality_score=fp_obj.quality_score,
+                    image_bytes=None,
+                )
+                pending.append(payload)
+
+            state["pending_events"] = pending
+            self._save_sync_state(state)
+
+        # Step 2: flush pending queue if online.
+        mqtt_client = self._get_mqtt_client_if_connected()
+        if mqtt_client is None:
+            return 0
+
+        sent = 0
+        with self._sync_lock:
+            state = self._load_sync_state()
+            pending = state.get("pending_events", [])
+            still_pending: list[dict[str, Any]] = []
+            synced = {int(x) for x in state.get("synced_fp_ids", [])}
+
+            for payload in pending:
+                topic = "worker/{}/enrolled".format(self._settings.device_id)
+                ok = mqtt_client.publish(topic, json.dumps(payload), qos=1)
+                if ok:
+                    fp_id = self._payload_fp_id(payload)
+                    if fp_id is not None:
+                        synced.add(fp_id)
+                    sent += 1
+                else:
+                    still_pending.append(payload)
+
+            state["synced_fp_ids"] = sorted(synced)
+            state["pending_events"] = still_pending
+            self._save_sync_state(state)
+
+        if sent > 0:
+            logger.info("Synced %d offline enrollment event(s) to orchestrator.", sent)
+        return sent
+
+    def _publish_enrollment_event(
+        self,
+        user_obj: Any,
+        fp_id: int,
+        finger_index: int,
+        embedding_list: list[float],
+        quality_score: float,
+        image_bytes: bytes | None = None,
+    ) -> None:
+        """Publish a new enrollment event to orchestrator via MQTT.
+
+        Topic: worker/{device_id}/enrolled
+        The orchestrator is responsible for broadcasting this to other workers.
+        """
+        payload = self._build_enrollment_payload(
+            user_obj=user_obj,
+            fp_id=fp_id,
+            finger_index=finger_index,
+            embedding_list=embedding_list,
+            quality_score=quality_score,
+            image_bytes=image_bytes,
+        )
+
+        mqtt_client = self._get_mqtt_client_if_connected()
+        user_dict = user_obj.to_dict() if hasattr(user_obj, "to_dict") else {}
+        if mqtt_client is None:
+            self._queue_pending_event(payload)
+            logger.info(
+                "MQTT offline; queued enrollment event for later sync (fp_id=%d)", fp_id
+            )
+            return
+
         topic = "worker/{}/enrolled".format(self._settings.device_id)
-        mqtt_client.publish(topic, json.dumps(payload), qos=1)
-        logger.info("📤 Enrollment event published for user %s (fp_id=%d)",
-                    user_dict.get("full_name", "?"), fp_id)
+        ok = mqtt_client.publish(topic, json.dumps(payload), qos=1)
+        if ok:
+            self._mark_fp_synced(fp_id)
+            logger.info(
+                "📤 Enrollment event published for user %s (fp_id=%d)",
+                user_dict.get("full_name", "?"),
+                fp_id,
+            )
+        else:
+            self._queue_pending_event(payload)
+            logger.warning(
+                "Enrollment publish failed; queued for retry (fp_id=%d)", fp_id
+            )
 
     # -- downstream: receive sync from orchestrator --------------------------
 

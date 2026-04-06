@@ -157,6 +157,7 @@ class MQTTWorkerClient:
                 logger.debug("Subscribed: %s", topic)
 
             self._send_heartbeat(status=WorkerStatus.ONLINE)
+            self._sync_offline_data_on_connect()
             self._start_heartbeat()
         else:
             logger.error("MQTT connection failed, rc=%s", rc)
@@ -248,6 +249,26 @@ class MQTTWorkerClient:
         """Send a heartbeat immediately (for CLI/GUI use)."""
         self._send_heartbeat(status)
         return self._connected
+
+    def _sync_offline_data_on_connect(self) -> None:
+        """Flush locally queued enrollment events after MQTT reconnects."""
+
+        def _worker() -> None:
+            try:
+                from app.services.pipeline_service import get_pipeline_service
+
+                svc = get_pipeline_service()
+                sent = svc.sync_offline_enrollments()
+                if sent:
+                    logger.info("Offline sync on reconnect sent %d event(s).", sent)
+            except Exception as exc:
+                logger.warning("Offline sync on reconnect failed: %s", exc)
+
+        threading.Thread(
+            target=_worker,
+            daemon=True,
+            name="mqtt-offline-sync",
+        ).start()
 
 
 # ---------------------------------------------------------------------------
