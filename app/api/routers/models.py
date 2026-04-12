@@ -105,8 +105,8 @@ async def activate_model(
 async def convert_model(
     model_id: str,
     body: ConvertRequest,
-    svc: ModelService = Depends(get_model_service),
     bg: BackgroundTasks,
+    svc: ModelService = Depends(get_model_service),
 ) -> ApiResponse:
     model = await svc.get_model(model_id)
     if model is None:
