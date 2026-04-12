@@ -193,7 +193,10 @@ async def ws_sensor_stream(websocket: WebSocket) -> None:
                     except asyncio.CancelledError:
                         pass
                     stream_task = None
-                await websocket.send_json({"status": "stopped"})
+                try:
+                    await websocket.send_json({"status": "stopped"})
+                except Exception:
+                    pass  # Client already disconnected
 
             else:
                 await websocket.send_json({"error": f"Unknown action: {action}"})
