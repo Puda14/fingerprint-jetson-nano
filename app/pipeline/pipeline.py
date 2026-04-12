@@ -148,6 +148,12 @@ class VerificationPipeline:
         """Hot-reload the model inference engine with a new model path."""
         logger.info("VerficationPipeline: reloading model %s...", model_path)
         try:
+            model_suffix = model_path.rsplit(".", 1)[-1].lower() if "." in model_path else ""
+            if model_suffix == "onnx":
+                self._backend = ONNXBackend()
+            elif model_suffix in ("engine", "trt"):
+                self._backend = TensorRTBackend()
+
             loaded = self._backend.load(model_path)
             if loaded:
                 logger.info("Successfully reloaded model: %s", model_path)

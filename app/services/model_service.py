@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # In-memory registry: stores model info and tracks active model
 _model_registry: Dict[str, Dict[str, Any]] = {}
 _active_model_id: Optional[str] = None
+_MODEL_EXTENSIONS = {".onnx", ".trt", ".engine", ".pt", ".pth"}
 
 # State file for loaded models (persisted across restarts)
 _STATE_FILE = os.path.join(os.getcwd(), "models", "loaded_models.json")
@@ -76,6 +77,64 @@ class ModelService:
     def model_dir(self) -> str:
         return str(self._model_dir)
 
+    def build_local_model_path(
+        self,
+        model_type: str,
+        model_name: str,
+        relative_path: str = "",
+    ) -> Path:
+        """Resolve the local target path for a downloaded model."""
+        if relative_path:
+            clean_parts = [
+                part for part in Path(relative_path).parts
+                if part not in ("", ".")
+            ]
+            return self._model_dir / model_type / Path(*clean_parts)
+        return self._model_dir / model_type / model_name
+
+    def _store_loaded_ref(
+        self,
+        model_name: str,
+        relative_path: str = "",
+    ) -> str:
+        if not relative_path:
+            return model_name
+
+        rel_path = Path(relative_path)
+        if rel_path.parent != Path("."):
+            return rel_path.parent.as_posix()
+        return rel_path.name
+
+    def _resolve_loaded_scope(self, model_type: str) -> Optional[Path]:
+        with self._lock:
+            model_ref = self._loaded_models.get(model_type)
+
+        if not model_ref:
+            return None
+
+        candidate = self._model_dir / model_type / model_ref
+        if candidate.exists():
+            return candidate
+
+        type_dir = self._model_dir / model_type
+        if not type_dir.exists():
+            return None
+
+        matches = sorted(type_dir.rglob(model_ref))
+        if matches:
+            return matches[0]
+        return None
+
+    def _collect_candidate_models(self, root: Path) -> List[Path]:
+        if root.is_file() and root.suffix.lower() in _MODEL_EXTENSIONS:
+            return [root]
+        if not root.exists():
+            return []
+        return sorted(
+            p for p in root.rglob("*")
+            if p.is_file() and p.suffix.lower() in _MODEL_EXTENSIONS
+        )
+
     # -- scan / list ---------------------------------------------------------
 
     async def list_models(self) -> List[Dict[str, Any]]:
@@ -86,11 +145,12 @@ class ModelService:
         if not self._model_dir.exists():
             return models
 
-        extensions = {".onnx", ".trt", ".engine", ".pt", ".pth"}
-        for path in sorted(self._model_dir.iterdir()):
-            if path.suffix.lower() not in extensions:
-                continue
-            model_id = _path_to_id(path)
+        for path in sorted(
+            p for p in self._model_dir.rglob("*")
+            if p.is_file() and p.suffix.lower() in _MODEL_EXTENSIONS
+        ):
+            relative_name = path.relative_to(self._model_dir).as_posix()
+            model_id = _path_to_id(relative_name)
             fmt = path.suffix.lstrip(".").lower()
             if fmt == "engine":
                 fmt = "trt"
@@ -99,7 +159,7 @@ class ModelService:
 
             info = {
                 "id": model_id,
-                "filename": path.name,
+                "filename": relative_name,
                 "format": fmt,
                 "size_mb": round(path.stat().st_size / (1024 * 1024), 2),
                 "is_active": model_id == _active_model_id,
@@ -114,12 +174,13 @@ class ModelService:
 
     async def upload_model(self, filename: str, content: bytes) -> Dict[str, Any]:
         dest = self._model_dir / filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(dest.write_bytes, content)
 
-        model_id = _path_to_id(dest)
+        model_id = _path_to_id(dest.relative_to(self._model_dir).as_posix())
         info = {
             "id": model_id,
-            "filename": filename,
+            "filename": dest.relative_to(self._model_dir).as_posix(),
             "size_mb": round(len(content) / (1024 * 1024), 2),
         }
         _model_registry[model_id] = info
@@ -178,7 +239,7 @@ class ModelService:
 
         src = self._model_dir / info["filename"]
         dst_name = src.stem + f"_{precision}.engine"
-        dst = self._model_dir / dst_name
+        dst = src.parent / dst_name
 
         logger.info(
             "Converting %s -> %s (precision=%s, batch=%d)",
@@ -233,10 +294,10 @@ class ModelService:
         if not dst.exists():
             raise RuntimeError(f"trtexec succeeded but output file not found: {dst}")
 
-        new_id = _path_to_id(dst)
+        new_id = _path_to_id(dst.relative_to(self._model_dir).as_posix())
         new_info = {
             "id": new_id,
-            "filename": dst_name,
+            "filename": dst.relative_to(self._model_dir).as_posix(),
             "format": "engine",
             "size_mb": round(dst.stat().st_size / (1024 * 1024), 2),
             "is_active": False,
@@ -283,14 +344,19 @@ class ModelService:
         model_name: str,
         version: str,
         download_url: str,
+        relative_path: str = "",
     ) -> Tuple[bool, Optional[str]]:
         """Download a model from orchestrator presigned URL.
 
-        Saves to: models/{model_type}/{model_name}
+        Saves to: models/{model_type}/{relative_path or model_name}
         Returns (success, error_message).
         """
-        save_dir = self._model_dir / model_type
-        save_path = save_dir / model_name
+        save_path = self.build_local_model_path(
+            model_type=model_type,
+            model_name=model_name,
+            relative_path=relative_path,
+        )
+        save_dir = save_path.parent
 
         try:
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -316,7 +382,10 @@ class ModelService:
             )
 
             with self._lock:
-                self._loaded_models[model_type] = model_name
+                self._loaded_models[model_type] = self._store_loaded_ref(
+                    model_name=model_name,
+                    relative_path=relative_path,
+                )
                 self._save_state()
 
             return True, None
@@ -331,39 +400,43 @@ class ModelService:
             logger.error("❌ %s", error)
             return False, error
 
-    def get_model_path_by_type(self, model_type: str) -> Optional[str]:
+    def get_model_path_by_type(
+        self,
+        model_type: str,
+        backend_preference: Optional[str] = None,
+    ) -> Optional[str]:
         """Get the path to the loaded model for a given type.
 
-        Prefers TRT/engine files over ONNX.
+        Prefers the active folder for that type and then selects the best
+        matching file for the current runtime/backend preference.
         """
-        with self._lock:
-            model_name = self._loaded_models.get(model_type)
-
         type_dir = self._model_dir / model_type
-
-        if not model_name:
-            # Try to find any model file in the type directory
-            if not type_dir.is_dir():
-                return None
-            for f in sorted(type_dir.iterdir()):
-                if f.suffix in (".trt", ".engine"):
-                    return str(f)
-            for f in sorted(type_dir.iterdir()):
-                if f.suffix == ".onnx":
-                    return str(f)
+        search_root = self._resolve_loaded_scope(model_type) or type_dir
+        if not search_root.exists():
             return None
 
-        # Prefer TRT engine over ONNX
-        if model_name.endswith(".onnx"):
-            for ext in (".trt", ".engine"):
-                alt = type_dir / model_name.replace(".onnx", ext)
-                if alt.exists():
-                    return str(alt)
+        candidate_root = search_root.parent if search_root.is_file() else search_root
+        candidates = self._collect_candidate_models(candidate_root)
+        if not candidates and candidate_root != type_dir and type_dir.exists():
+            candidates = self._collect_candidate_models(type_dir)
+        if not candidates:
+            return None
 
-        model_path = type_dir / model_name
-        if model_path.exists():
-            return str(model_path)
-        return None
+        want_tensorrt = (
+            backend_preference == "tensorrt" and is_tensorrt_runtime_available()
+        )
+        preferred_exts = (
+            (".engine", ".trt", ".onnx")
+            if want_tensorrt
+            else (".onnx", ".engine", ".trt")
+        )
+
+        for ext in preferred_exts:
+            for candidate in candidates:
+                if candidate.suffix.lower() == ext:
+                    return str(candidate)
+
+        return str(candidates[0])
 
 
 # ---------------------------------------------------------------------------
@@ -371,9 +444,20 @@ class ModelService:
 # ---------------------------------------------------------------------------
 
 
-def _path_to_id(path: Path) -> str:
-    """Deterministic short id from filename."""
-    return hashlib.md5(path.name.encode()).hexdigest()[:12]
+def _path_to_id(path_ref: Any) -> str:
+    """Deterministic short id from a path-like reference."""
+    path_str = str(path_ref)
+    return hashlib.md5(path_str.encode()).hexdigest()[:12]
+
+
+def is_tensorrt_runtime_available() -> bool:
+    """Return whether TensorRT and PyCUDA are both available."""
+    try:
+        import tensorrt  # type: ignore[import-untyped]  # noqa: F401
+        import pycuda.driver  # type: ignore[import-untyped]  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def convert_onnx_to_trt(

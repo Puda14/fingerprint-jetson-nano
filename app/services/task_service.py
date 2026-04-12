@@ -358,12 +358,12 @@ class TaskService:
 
     def _find_model(self, model_name: str) -> str:
         """Find the ONNX model file on disk."""
-        from app.services.model_service import get_model_service
+        from app.services.model_service import get_model_service_sync
 
-        model_svc = ModelService.get_instance()
+        model_svc = get_model_service_sync()
 
         # Try to get embedding model path by type
-        path = model_svc.get_model_path_by_type("embedding")
+        path = model_svc.get_model_path_by_type("embedding", backend_preference="onnx")
         if path:
             return path
 
@@ -373,9 +373,10 @@ class TaskService:
             type_dir = os.path.join(model_dir, model_type)
             if not os.path.isdir(type_dir):
                 continue
-            for f in os.listdir(type_dir):
-                if f.endswith(".onnx"):
-                    return os.path.join(type_dir, f)
+            for root, _, files in os.walk(type_dir):
+                for f in sorted(files):
+                    if f.endswith(".onnx"):
+                        return os.path.join(root, f)
 
         # Check root models/ directory
         if os.path.isdir(model_dir):

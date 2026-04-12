@@ -200,7 +200,7 @@ def _handle_model_update(mqtt_client_ref: Any, payload: ModelUpdatePayload) -> N
     worker_id = mqtt_client_ref.worker_id
     model_service = get_model_service_sync()
 
-    task_id = "model_{}".format(payload.model_name)
+    task_id = "model_{}_{}".format(payload.model_type, payload.model_name)
     mqtt_client_ref.current_task_id = task_id
 
     try:
@@ -212,6 +212,7 @@ def _handle_model_update(mqtt_client_ref: Any, payload: ModelUpdatePayload) -> N
             model_name=payload.model_name,
             version=payload.version,
             download_url=payload.download_url,
+            relative_path=payload.relative_path,
         )
 
         if not success:
@@ -219,11 +220,15 @@ def _handle_model_update(mqtt_client_ref: Any, payload: ModelUpdatePayload) -> N
             return
 
         # Auto-convert ONNX → TensorRT if applicable
-        if payload.model_name.endswith(".onnx"):
+        downloaded_path = model_service.build_local_model_path(
+            model_type=payload.model_type,
+            model_name=payload.model_name,
+            relative_path=payload.relative_path,
+        )
+        if downloaded_path.suffix.lower() == ".onnx":
             from app.services.model_service import convert_onnx_to_trt
-            model_dir = model_service.model_dir
-            onnx_path = os.path.join(model_dir, payload.model_type, payload.model_name)
-            engine_path = onnx_path.replace(".onnx", "_fp16.engine")
+            onnx_path = str(downloaded_path)
+            engine_path = str(downloaded_path.with_name(downloaded_path.stem + "_fp16.engine"))
 
             if not os.path.exists(engine_path):
                 try:

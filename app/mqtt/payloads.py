@@ -102,6 +102,7 @@ class ModelUpdatePayload:
         self.version: str = kwargs.get("version", "")
         self.download_url: str = kwargs.get("download_url", "")   # presigned URL
         self.s3_path: str = kwargs.get("s3_path", "")
+        self.relative_path: str = kwargs.get("relative_path", "")
 
 
 # ── Worker → Orchestrator payloads ───────────────────────────────────────────

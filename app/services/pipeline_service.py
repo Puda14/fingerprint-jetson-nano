@@ -153,37 +153,61 @@ class PipelineService:
 
         # --- Pipeline ---
         pipeline_cfg = self._settings.as_pipeline_config()
+        pipeline_cfg["model_path"] = ""
         self._pipeline = VerificationPipeline(pipeline_cfg)
-
-        # Determine which model to load via ModelService first
-        try:
-            from app.services.model_service import get_model_service_sync
-            svc = get_model_service_sync()
-            msvc_path = svc.get_model_path_by_type("embedding")
-        except Exception:
-            msvc_path = None
-
-        model_path = msvc_path or self._settings.model_path
-        if model_path and Path(model_path).exists():
-            self._active_model = Path(model_path).name
-            self._model_loaded = True
-            logger.info("Model loaded: %s", self._active_model)
-        else:
-            # Fallback: scan model_dir
-            model_dir = Path(self._settings.model_dir)
-            if model_dir.exists():
-                trt_files = list(model_dir.glob("*.trt")) + list(model_dir.glob("*.engine"))
-                onnx_files = list(model_dir.glob("*.onnx"))
-                candidates = trt_files or onnx_files
-                if candidates:
-                    self._active_model = candidates[0].name
-                    self._model_loaded = True
-                    logger.info("Model loaded (scanned): %s", self._active_model)
+        self._load_active_embedding_model()
 
         # --- Build FAISS index from DB ---
         await self._rebuild_faiss_index()
 
         logger.info("PipelineService ready. Active model=%s", self._active_model)
+
+    def _resolve_embedding_model_path(self) -> Optional[str]:
+        try:
+            from app.services.model_service import get_model_service_sync
+            svc = get_model_service_sync()
+            managed_path = svc.get_model_path_by_type(
+                "embedding",
+                backend_preference=self._settings.backend,
+            )
+            if managed_path:
+                return managed_path
+        except Exception as exc:
+            logger.warning("Failed to resolve managed embedding model: %s", exc)
+
+        env_path = self._settings.model_path
+        if env_path and Path(env_path).exists():
+            return env_path
+        return None
+
+    def _load_active_embedding_model(self) -> None:
+        if self._pipeline is None:
+            return
+
+        model_path = self._resolve_embedding_model_path()
+        if not model_path:
+            self._active_model = None
+            self._model_loaded = False
+            logger.warning("No embedding model found on disk.")
+            return
+
+        if (
+            self._settings.backend == "tensorrt"
+            and model_path.endswith(".onnx")
+        ):
+            logger.warning(
+                "TensorRT backend requested but no runnable TensorRT engine is available; "
+                "falling back to ONNX model %s",
+                model_path,
+            )
+
+        loaded = self._pipeline.reload_backend(model_path)
+        self._active_model = Path(model_path).name
+        self._model_loaded = loaded
+        if loaded:
+            logger.info("Active embedding model loaded: %s", model_path)
+        else:
+            logger.error("Failed to load active embedding model: %s", model_path)
 
     async def _rebuild_faiss_index(self) -> None:
         """Load all active fingerprint embeddings from DB and build FAISS gallery."""
@@ -1140,25 +1164,7 @@ class PipelineService:
     def reload_models(self) -> None:
         """Dynamically detect and reload the active model (called after MQTT update)."""
         logger.info("Reloading active models...")
-        try:
-            from app.services.model_service import get_model_service_sync
-            svc = get_model_service_sync()
-            msvc_path = svc.get_model_path_by_type("embedding")
-        except Exception:
-            msvc_path = None
-
-        model_path = msvc_path or self._settings.model_path
-        if model_path and Path(model_path).exists():
-            self._active_model = Path(model_path).name
-            loaded = self._pipeline.reload_backend(model_path)
-            if loaded:
-                self._model_loaded = True
-                logger.info("Model successfully reloaded: %s", model_path)
-            else:
-                self._model_loaded = False
-                logger.error("Failed to reload model: %s", model_path)
-        else:
-            logger.warning("No valid model path to reload.")
+        self._load_active_embedding_model()
 
 
 # ---------------------------------------------------------------------------
