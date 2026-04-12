@@ -17,8 +17,10 @@ pydantic<2.0.0
 python-dateutil>=2.8.2,<3.0.0
 
 # --- Cryptography ----------------------------------------------------------
-# cryptography: install via apt on Jetson Nano to avoid Rust build requirement
-# sudo apt-get install python3-cryptography
+# cryptography: use the Jetson/Ubuntu system package in the default Python 3.6
+# TensorRT environment. Do not install/upgrade it from pip here, otherwise the
+# shared venv can pull a newer build that only emits deprecation noise or
+# requires extra toolchain pieces on Nano.
 
 # --- Numerical / ML --------------------------------------------------------
 # numpy>=1.19.0,<2.1 # Bị comment out để dùng numpy 1.13.3 có sẵn của Jetpack (tránh lỗi Illegal instruction)

@@ -12,7 +12,19 @@ import json
 import logging
 import os
 import struct
+import warnings
 from pathlib import Path
+
+# Jetson Nano is pinned to Python 3.6 on older JetPack releases. Recent
+# cryptography builds emit a deprecation warning on import even though the
+# package still works. Keep startup logs clean and handle Python 3.6 support
+# in the setup scripts instead of printing this warning every boot.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Python 3\.6 is no longer supported by the Python core team\..*",
+    category=Warning,
+    module=r"cryptography.*",
+)
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC

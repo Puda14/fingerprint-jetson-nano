@@ -132,6 +132,11 @@ install_python_deps() {
 
     # shellcheck disable=SC1090
     source "$VENV_DIR/bin/activate"
+
+    # Fresh venvs created with --system-site-packages should keep using the
+    # distro cryptography package on Python 3.6. Remove any stale pip copy that
+    # may have been injected by previous experiments before installing the app.
+    python3 -m pip uninstall -y cryptography onnxruntime onnxruntime-gpu >/dev/null 2>&1 || true
     pip install -r "$PROJECT_ROOT/requirements.txt"
 
     local backend
@@ -222,6 +227,16 @@ compile_faiss_cpu() {
     git clone --branch v1.7.4 --depth 1 https://github.com/facebookresearch/faiss.git "$faiss_dir"
     cd "$faiss_dir"
 
+    # Ubuntu 18.04 on Jetson Nano ships SWIG 3.0.x, while newer FAISS Python
+    # bindings add the "-doxygen" flag that older SWIG does not understand.
+    # Strip that flag so the Python wrapper can still be generated on Python 3.6.
+    if swig -help 2>&1 | grep -q -- "-doxygen"; then
+        echo "SWIG supports -doxygen, keeping upstream flags"
+    else
+        echo "SWIG does not support -doxygen; patching FAISS CMakeLists for SWIG 3.0"
+        sed -i 's/"-doxygen"//g' faiss/python/CMakeLists.txt
+    fi
+
     wget -q https://github.com/Kitware/CMake/releases/download/v3.24.3/cmake-3.24.3-linux-aarch64.sh -O /tmp/cmake.sh
     chmod +x /tmp/cmake.sh
     mkdir -p /tmp/cmake_bin
@@ -242,7 +257,9 @@ compile_faiss_cpu() {
         -DPython_NumPy_INCLUDE_DIRS="$numpy_inc" \
         .
 
-    make -C build -j"$(nproc)" faiss swigfaiss
+    local faiss_make_jobs="${FAISS_MAKE_JOBS:-2}"
+    echo "Building FAISS with -j$faiss_make_jobs (override with FAISS_MAKE_JOBS=...)"
+    make -C build -j"$faiss_make_jobs" faiss swigfaiss
     cd build/faiss/python
     python3 setup.py install
     cd "$PROJECT_ROOT"
@@ -267,6 +284,7 @@ checks = [
     ("numpy", "NumPy"),
     ("cv2", "OpenCV"),
     ("cryptography", "cryptography"),
+    ("faiss", "FAISS"),
     ("fastapi", "FastAPI"),
     ("requests", "requests"),
     ("tensorrt", "TensorRT"),
