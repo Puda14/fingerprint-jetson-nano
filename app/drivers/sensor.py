@@ -126,7 +126,13 @@ class USBSensorDriver(SensorDriver):
                 result = self._reader.open()
                 self._connected = bool(result)
                 return self._connected
-            except (ImportError, Exception):
+            except ImportError as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to import SDK from {self._sdk_path}: {e}")
+                return False
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Sensor open() crashed! Hardware permission or USB error?: {e}")
                 return False
 
     def close(self) -> None:
