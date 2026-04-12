@@ -1,12 +1,12 @@
 """Minutiae extraction: abstract base, FingerNet ONNX backend, and crossing-number fallback."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Sequence
 
 import cv2
 import numpy as np
@@ -67,7 +67,7 @@ class MinutiaeExtractor(ABC):
     def filter_minutiae(
         self,
         minutiae: List[Minutia],
-        image_shape: tuple[int, int],
+        image_shape: Tuple[int, int],
         border_margin: int = 10,
         quality_threshold: float = 0.25,
         max_count: int = 200,
@@ -318,7 +318,7 @@ class SimpleCNExtractor(MinutiaeExtractor):
         skel: np.ndarray,
         x: int,
         y: int,
-        offsets: List[tuple[int, int]],
+        offsets: List[Tuple[int, int]],
         neighbours: List[int],
     ) -> float:
         """Rough orientation from the first ridge-pixel neighbour direction."""

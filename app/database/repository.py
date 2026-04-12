@@ -6,9 +6,9 @@ Provides UserRepository, FingerprintRepository, and VerificationLogRepository.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Tuple
 
 from app.database.database import DatabaseManager
 from app.database.models import Fingerprint, User, VerificationLog

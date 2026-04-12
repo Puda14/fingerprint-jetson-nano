@@ -6,13 +6,13 @@ Encrypts/decrypts embedding vectors and minutiae data at rest.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import base64
 import json
 import logging
 import os
 import struct
 from pathlib import Path
-from typing import List, Optional, Optional
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC

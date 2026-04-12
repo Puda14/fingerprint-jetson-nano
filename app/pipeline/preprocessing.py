@@ -1,9 +1,9 @@
 """Fingerprint image preprocessing: enhancement, segmentation, and normalization."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 import math
-from typing import List, Optional, Any
 
 import cv2
 import numpy as np

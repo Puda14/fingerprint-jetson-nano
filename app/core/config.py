@@ -1,4 +1,3 @@
-from typing import List, Optional
 """
 Centralized configuration for Fingerprint Jetson Nano Worker.
 
@@ -11,6 +10,7 @@ See .env.example for all configurable variables.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 from functools import lru_cache
 
 from pydantic import BaseSettings, Field, validator

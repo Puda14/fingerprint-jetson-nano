@@ -1,8 +1,8 @@
 """MQTT payload dataclasses for worker ↔ orchestrator communication."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 from enum import Enum
-from typing import Any, Dict, List, Optional
 
 
 # ── Enums ────────────────────────────────────────────────────────────────────

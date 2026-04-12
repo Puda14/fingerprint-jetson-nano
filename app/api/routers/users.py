@@ -1,9 +1,9 @@
 """User management endpoints: CRUD + finger enrollment."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import math
 from datetime import datetime, timezone
-from typing import Optional
 
 try:
     from typing import Annotated

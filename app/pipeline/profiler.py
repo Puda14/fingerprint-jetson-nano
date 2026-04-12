@@ -1,11 +1,11 @@
 """Thread-safe pipeline profiler for stage-by-stage timing collection."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import json
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Any
 
 
 @dataclass
@@ -30,7 +30,7 @@ class PipelineProfiler:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._stages: dict[str, _StageRecord] = {}
+        self._stages: Dict[str, _StageRecord] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -69,7 +69,7 @@ class PipelineProfiler:
             record = self._stages.setdefault(stage, _StageRecord())
             record.durations.append(duration_ms)
 
-    def get_report(self) -> dict[str, dict[str, Any]]:
+    def get_report(self) -> Dict[str, Dict[str, Any]]:
         """Return per-stage statistics.
 
         For each stage the report contains:
@@ -77,7 +77,7 @@ class PipelineProfiler:
         ``total_ms``.
         """
         with self._lock:
-            report: dict[str, dict[str, Any]] = {}
+            report: Dict[str, Dict[str, Any]] = {}
             for name, rec in self._stages.items():
                 durations = rec.durations
                 if not durations:

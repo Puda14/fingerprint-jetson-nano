@@ -6,11 +6,11 @@ register/verify task topics.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import json
 import logging
 import threading
 import time
-from typing import List, Optional, Any, Callable, Dict, Optional
 
 import paho.mqtt.client as mqtt
 

@@ -6,10 +6,10 @@ installed by falling back to a pure-numpy brute-force search.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 import math
 import os
-from typing import Any
 
 import numpy as np
 
@@ -44,8 +44,8 @@ class FAISSIndexManager:
     def __init__(self, dim: int = 256) -> None:
         self._dim = dim
         self._index: Any = None  # faiss.Index or None
-        self._id_map: dict[int, int] = {}  # faiss internal idx -> fp_id
-        self._reverse_map: dict[int, int] = {}  # fp_id -> faiss internal idx
+        self._id_map: Dict[int, int] = {}  # faiss internal idx -> fp_id
+        self._reverse_map: Dict[int, int] = {}  # fp_id -> faiss internal idx
         self._next_internal_id = 0
 
         # Numpy fallback storage
@@ -132,7 +132,7 @@ class FAISSIndexManager:
 
     def search(
         self, query: np.ndarray, top_k: int = 5
-    ) -> List[tuple[int, float]]:
+    ) -> List[Tuple[int, float]]:
         """Search the index for the closest embeddings.
 
         Args:
@@ -150,12 +150,12 @@ class FAISSIndexManager:
 
     def _search_faiss(
         self, query: np.ndarray, top_k: int
-    ) -> List[tuple[int, float]]:
+    ) -> List[Tuple[int, float]]:
         if self._index is None or self._index.ntotal == 0:
             return []
         k = min(top_k, self._index.ntotal)
         distances, indices = self._index.search(query, k)
-        results: List[tuple[int, float]] = []
+        results: List[Tuple[int, float]] = []
         for dist, idx in zip(distances[0], indices[0]):
             if idx < 0:
                 continue
@@ -165,14 +165,14 @@ class FAISSIndexManager:
 
     def _search_numpy(
         self, query: np.ndarray, top_k: int
-    ) -> List[tuple[int, float]]:
+    ) -> List[Tuple[int, float]]:
         if self._np_embeddings is None or len(self._np_embeddings) == 0:
             return []
         scores = (self._np_embeddings @ query.T).squeeze()
         k = min(top_k, len(scores))
         top_indices = np.argpartition(-scores, k)[:k]
         top_indices = top_indices[np.argsort(-scores[top_indices])]
-        results: List[tuple[int, float]] = []
+        results: List[Tuple[int, float]] = []
         for idx in top_indices:
             results.append((int(self._np_ids[idx]), float(scores[idx])))  # type: ignore[index]
         return results

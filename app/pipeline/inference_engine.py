@@ -5,10 +5,10 @@ dependency is unavailable.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import List, Optional, Any
 
 import numpy as np
 
@@ -49,7 +49,7 @@ class InferenceBackend(ABC):
         """
 
     @abstractmethod
-    def get_info(self) -> dict[str, Any]:
+    def get_info(self) -> Dict[str, Any]:
         """Return model / backend metadata."""
 
     # Shared helpers -----------------------------------------------
@@ -85,7 +85,7 @@ class InferenceBackend(ABC):
         )
         return avg
 
-    def profile(self, graph_data: GraphData, iterations: int = 20) -> dict[str, float]:
+    def profile(self, graph_data: GraphData, iterations: int = 20) -> Dict[str, float]:
         """Profile inference latency over *iterations* runs.
 
         Returns:
@@ -266,7 +266,7 @@ class ONNXBackend(InferenceBackend):
             rel_feat = rel_feat[np.newaxis, ...]  # (1, N, N, 7)
 
         input_names = [inp.name for inp in self._session.get_inputs()]
-        feed: dict[str, np.ndarray] = {}
+        feed: Dict[str, np.ndarray] = {}
 
         # Map positionally -- the ONNX export order is:
         #   node_features, edge_index, relational_features
@@ -279,8 +279,8 @@ class ONNXBackend(InferenceBackend):
 
         return self._l2_normalize(embedding)
 
-    def get_info(self) -> dict[str, Any]:
-        info: dict[str, Any] = {
+    def get_info(self) -> Dict[str, Any]:
+        info: Dict[str, Any] = {
             "backend": "onnxruntime",
             "model_path": self._model_path,
             "loaded": self._session is not None,
@@ -315,7 +315,7 @@ class TensorRTBackend(InferenceBackend):
         self._model_path: Optional[str] = None
         self._trt = None
         self._cuda = None
-        self._bindings: List[dict[str, Any]] = []
+        self._bindings: List[Dict[str, Any]] = []
         self._stream = None
 
     def load(self, model_path: str) -> bool:
@@ -447,8 +447,8 @@ class TensorRTBackend(InferenceBackend):
         embedding = host_outputs[0].squeeze().astype(np.float32)
         return self._l2_normalize(embedding)
 
-    def get_info(self) -> dict[str, Any]:
-        info: dict[str, Any] = {
+    def get_info(self) -> Dict[str, Any]:
+        info: Dict[str, Any] = {
             "backend": "tensorrt",
             "model_path": self._model_path,
             "loaded": self._engine is not None,

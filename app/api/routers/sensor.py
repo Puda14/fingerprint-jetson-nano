@@ -1,6 +1,7 @@
 """Sensor endpoints: status, single capture, LED control, live stream via WebSocket."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import base64
 import json

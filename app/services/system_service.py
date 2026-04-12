@@ -3,6 +3,7 @@ System service: health metrics, database backup, configuration management.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import logging
 import shutil
@@ -10,7 +11,6 @@ import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Any
 
 from app.core.config import get_settings
 
@@ -24,13 +24,13 @@ class SystemService:
         self._settings = get_settings()
         self._start_time = time.time()
         # Override config in memory (can extend to DB later)
-        self._config_overrides: dict[str, Any] = {}
+        self._config_overrides: Dict[str, Any] = {}
 
     # -- health --------------------------------------------------------------
 
     async def get_health(
         self, sensor_connected: bool = False, active_model: Optional[str] = None
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         """Collect system health metrics."""
         try:
             import psutil
@@ -93,7 +93,7 @@ class SystemService:
 
     # -- backup --------------------------------------------------------------
 
-    async def create_backup(self) -> dict[str, Any]:
+    async def create_backup(self) -> Dict[str, Any]:
         """Copy database file to a timestamped backup."""
         backup_dir = Path(self._settings.backup_dir)
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -121,7 +121,7 @@ class SystemService:
 
     # -- configuration CRUD --------------------------------------------------
 
-    def get_config(self) -> dict[str, Any]:
+    def get_config(self) -> Dict[str, Any]:
         s = self._settings
         base = {
             "device_id": s.device_id,
@@ -137,7 +137,7 @@ class SystemService:
         base.update(self._config_overrides)
         return base
 
-    def update_config(self, updates: dict[str, Any]) -> dict[str, Any]:
+    def update_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Update configurations allowed to change at runtime."""
         allowed = {"verify_threshold", "identify_threshold", "identify_top_k", "debug"}
         for key, value in updates.items():
@@ -148,7 +148,7 @@ class SystemService:
 
     # -- device listing ------------------------------------------------------
 
-    async def list_devices(self) -> List[dict[str, Any]]:
+    async def list_devices(self) -> List[Dict[str, Any]]:
         hostname = socket.gethostname()
         try:
             ip = socket.gethostbyname(hostname)

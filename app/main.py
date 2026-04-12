@@ -1,4 +1,3 @@
-from typing import List, Optional
 """
 Entry point for Fingerprint Jetson Nano Worker.
 
@@ -7,6 +6,7 @@ Contains only application factory logic — no business logic here.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 import logging.config
 

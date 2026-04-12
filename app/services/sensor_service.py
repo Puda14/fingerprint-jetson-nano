@@ -7,10 +7,10 @@ Fallbacks to MockSensorDriver if hardware is not detected.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import logging
 from functools import partial
-from typing import List, Optional, Optional
 
 from app.drivers import (
     USBSensorDriver,
@@ -128,7 +128,7 @@ class SensorService:
 
     # -- hardware matching (USB sensor only) ---------------------------------
 
-    async def add_user(self, user_id: Optional[int] = None) -> tuple[bool, int]:
+    async def add_user(self, user_id: Optional[int] = None) -> Tuple[bool, int]:
         if not isinstance(self._driver, USBSensorDriver):
             return False, 0
         loop = asyncio.get_running_loop()
@@ -138,7 +138,7 @@ class SensorService:
 
     async def match_fingerprint(
         self, timeout_sec: float = 5.0
-    ) -> tuple[bool, int]:
+    ) -> Tuple[bool, int]:
         if not isinstance(self._driver, USBSensorDriver):
             return False, 0
         loop = asyncio.get_running_loop()

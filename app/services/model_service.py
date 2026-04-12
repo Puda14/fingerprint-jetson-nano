@@ -3,6 +3,7 @@ Service managing model inference: scan, upload, delete, convert, profile.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import hashlib
 import json
@@ -12,7 +13,6 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional, Any, Dict, Optional, Tuple
 
 import requests
 
@@ -21,7 +21,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 # In-memory registry: stores model info and tracks active model
-_model_registry: dict[str, dict[str, Any]] = {}
+_model_registry: Dict[str, Dict[str, Any]] = {}
 _active_model_id: Optional[str] = None
 
 # State file for loaded models (persisted across restarts)
@@ -78,10 +78,10 @@ class ModelService:
 
     # -- scan / list ---------------------------------------------------------
 
-    async def list_models(self) -> List[dict[str, Any]]:
+    async def list_models(self) -> List[Dict[str, Any]]:
         """Scans models/ directory and returns metadata for each model file."""
         global _active_model_id
-        models: List[dict[str, Any]] = []
+        models: List[Dict[str, Any]] = []
 
         if not self._model_dir.exists():
             return models
@@ -112,7 +112,7 @@ class ModelService:
 
     # -- upload --------------------------------------------------------------
 
-    async def upload_model(self, filename: str, content: bytes) -> dict[str, Any]:
+    async def upload_model(self, filename: str, content: bytes) -> Dict[str, Any]:
         dest = self._model_dir / filename
         await asyncio.to_thread(dest.write_bytes, content)
 
@@ -165,7 +165,7 @@ class ModelService:
 
     async def convert_model(
         self, model_id: str, precision: str = "fp16", max_batch_size: int = 1
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         """
         ONNX to TensorRT conversion.
         In production: invokes trtexec subprocess.
@@ -207,7 +207,7 @@ class ModelService:
 
     # -- profile (benchmark) -------------------------------------------------
 
-    async def profile_model(self, model_id: str, num_runs: int = 100) -> dict[str, Any]:
+    async def profile_model(self, model_id: str, num_runs: int = 100) -> Dict[str, Any]:
         info = _model_registry.get(model_id)
         if info is None:
             raise ValueError(f"Model {model_id} not found")
@@ -230,7 +230,7 @@ class ModelService:
 
     # -- get model by id -----------------------------------------------------
 
-    async def get_model(self, model_id: str) -> dict[str, Any] | None:
+    async def get_model(self, model_id: str) -> Dict[str, Any] | None:
         if model_id not in _model_registry:
             await self.list_models()
         return _model_registry.get(model_id)

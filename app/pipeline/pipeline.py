@@ -1,11 +1,11 @@
 """End-to-end verification / identification pipeline orchestrating all stages."""
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import functools
 import logging
 import time
-from typing import Any, Callable, TypeVar
 
 import numpy as np
 
@@ -95,7 +95,7 @@ class VerificationPipeline:
         ``clahe_grid``           int   (8)
     """
 
-    def __init__(self, config: dict[str, Any] | None = None) -> None:
+    def __init__(self, config: Dict[str, Any] | None = None) -> None:
         cfg = config or {}
 
         self._image_width: int = cfg.get("image_width", 192)
@@ -175,7 +175,7 @@ class VerificationPipeline:
 
     async def extract_embedding(
         self, image: bytes
-    ) -> tuple[np.ndarray, dict[str, Any]]:
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Run the full pipeline and return the embedding + profiling data.
 
         Args:
@@ -240,7 +240,7 @@ class VerificationPipeline:
         probe_image: bytes,
         gallery_embedding: np.ndarray,
         threshold: float = 0.55,
-    ) -> tuple[bool, float]:
+    ) -> Tuple[bool, float]:
         """1:1 Verification — compare probe image with saved embedding.
 
         Args:
@@ -262,7 +262,7 @@ class VerificationPipeline:
         probe_image: bytes,
         top_k: int = 5,
         threshold: float = 0.50,
-    ) -> List[tuple[int, float]]:
+    ) -> List[Tuple[int, float]]:
         """1:N Identification — search in FAISS gallery.
 
         Args:
@@ -304,7 +304,7 @@ class VerificationPipeline:
     # Profiling
     # ------------------------------------------------------------------
 
-    def get_profiling(self) -> dict[str, Any]:
+    def get_profiling(self) -> Dict[str, Any]:
         """Return per-stage profiling statistics."""
         return self._profiler.get_report()
 

@@ -6,9 +6,9 @@ Moved from mdgt_edge/sensor/base.py to app/drivers/ to remove dependency
 on mdgt_edge package.
 """
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional, Optional, Tuple
 from enum import IntEnum
 import threading
 

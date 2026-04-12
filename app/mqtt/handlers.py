@@ -10,10 +10,10 @@ Handles:
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import json
 import logging
 import threading
-from typing import List, Optional, Any
 
 import paho.mqtt.client as mqtt
 

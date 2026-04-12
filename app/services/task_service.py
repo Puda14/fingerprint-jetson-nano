@@ -6,13 +6,13 @@ Results are published back to orchestrator via MQTT.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import base64
 import json
 import logging
 import os
 import time
-from typing import List, Optional, Any, Optional
 
 import requests
 

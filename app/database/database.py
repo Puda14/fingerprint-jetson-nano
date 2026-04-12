@@ -6,12 +6,12 @@ Provides DDL, thread-local connections, transaction management.
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import logging
 import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional, Any, Generator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ _INDEX_STATEMENTS = (
 class DatabaseManager:
     """Thread-safe SQLite database manager (singleton per db path)."""
 
-    _instances = {}   # type: dict[str, DatabaseManager]
+    _instances = {}   # type: Dict[str, DatabaseManager]
     _instance_lock = threading.Lock()
 
     def __new__(cls, db_path="data/fingerprint.db"):

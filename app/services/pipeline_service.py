@@ -6,13 +6,13 @@ using the actual AI pipeline (preprocessing → minutiae → graph → inference
 """
 
 
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator
 import asyncio
 import json
 import logging
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional, Any, Optional
 
 import numpy as np
 
@@ -244,7 +244,7 @@ class PipelineService:
 
     # -- user management (SQLite) --------------------------------------------
 
-    async def create_user(self, user_data: dict[str, Any]) -> dict[str, Any]:
+    async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         if self._user_repo is None:
             raise RuntimeError("Database not initialized")
         user = User(
@@ -257,7 +257,7 @@ class PipelineService:
         created = await loop.run_in_executor(None, self._user_repo.create, user)
         return created.to_dict()
 
-    async def get_user(self, user_id: int) -> dict[str, Any] | None:
+    async def get_user(self, user_id: int) -> Dict[str, Any] | None:
         if self._user_repo is None:
             return None
         loop = asyncio.get_running_loop()
@@ -271,7 +271,7 @@ class PipelineService:
         search: Optional[str] = None,
         department: Optional[str] = None,
         role: Optional[str] = None,
-    ) -> tuple[List[dict[str, Any]], int]:
+    ) -> Tuple[List[Dict[str, Any]], int]:
         if self._user_repo is None:
             return [], 0
 
@@ -310,8 +310,8 @@ class PipelineService:
         return result, total
 
     async def update_user(
-        self, user_id: int, updates: dict[str, Any]
-    ) -> dict[str, Any] | None:
+        self, user_id: int, updates: Dict[str, Any]
+    ) -> Dict[str, Any] | None:
         if self._user_repo is None:
             return None
         loop = asyncio.get_running_loop()
@@ -701,7 +701,7 @@ class PipelineService:
 
     # -- profiling -----------------------------------------------------------
 
-    async def get_profiling(self) -> dict[str, Any]:
+    async def get_profiling(self) -> Dict[str, Any]:
         user_count = 0
         fp_count = 0
         log_count = 0
@@ -740,7 +740,7 @@ class PipelineService:
         decision: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-    ) -> tuple[List[dict[str, Any]], int]:
+    ) -> Tuple[List[Dict[str, Any]], int]:
         if self._log_repo is None:
             return [], 0
 
@@ -765,7 +765,7 @@ class PipelineService:
         start_idx = (page - 1) * limit
         return log_dicts[start_idx: start_idx + limit], total
 
-    async def get_stats(self) -> dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         info = await self.get_profiling()
         return {
             "enrolled_users": info["total_users"],
@@ -779,7 +779,7 @@ class PipelineService:
 
     # -- upstream MQTT publish -----------------------------------------------
 
-    def _load_sync_state(self) -> dict[str, Any]:
+    def _load_sync_state(self) -> Dict[str, Any]:
         if not self._sync_state_file.exists():
             return {"synced_fp_ids": [], "pending_events": []}
         try:
@@ -793,7 +793,7 @@ class PipelineService:
             logger.warning("Failed to read enrollment sync state: %s", exc)
             return {"synced_fp_ids": [], "pending_events": []}
 
-    def _save_sync_state(self, state: dict[str, Any]) -> None:
+    def _save_sync_state(self, state: Dict[str, Any]) -> None:
         try:
             self._sync_state_file.parent.mkdir(parents=True, exist_ok=True)
             self._sync_state_file.write_text(
@@ -804,7 +804,7 @@ class PipelineService:
             logger.warning("Failed to save enrollment sync state: %s", exc)
 
     @staticmethod
-    def _payload_fp_id(payload: dict[str, Any]) -> Optional[int]:
+    def _payload_fp_id(payload: Dict[str, Any]) -> Optional[int]:
         try:
             fp = payload.get("fingerprint", {})
             fp_id = fp.get("fp_id")
@@ -826,7 +826,7 @@ class PipelineService:
             state["pending_events"] = pending
             self._save_sync_state(state)
 
-    def _queue_pending_event(self, payload: dict[str, Any]) -> None:
+    def _queue_pending_event(self, payload: Dict[str, Any]) -> None:
         fp_id = self._payload_fp_id(payload)
         with self._sync_lock:
             state = self._load_sync_state()
@@ -865,7 +865,7 @@ class PipelineService:
         embedding_list: List[float],
         quality_score: float,
         image_bytes: Optional[bytes] = None,
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         import base64
 
         user_dict = user_obj.to_dict() if hasattr(user_obj, "to_dict") else {}
@@ -962,7 +962,7 @@ class PipelineService:
         with self._sync_lock:
             state = self._load_sync_state()
             pending = state.get("pending_events", [])
-            still_pending: List[dict[str, Any]] = []
+            still_pending: List[Dict[str, Any]] = []
             synced = {int(x) for x in state.get("synced_fp_ids", [])}
 
             for payload in pending:
@@ -1033,7 +1033,7 @@ class PipelineService:
 
     # -- downstream: receive sync from orchestrator --------------------------
 
-    async def sync_remote_enrollment(self, data: dict[str, Any]) -> bool:
+    async def sync_remote_enrollment(self, data: Dict[str, Any]) -> bool:
         """Handle a sync payload from orchestrator (another worker enrolled).
 
         Writes user + fingerprint to local SQLite and adds embedding to FAISS.
