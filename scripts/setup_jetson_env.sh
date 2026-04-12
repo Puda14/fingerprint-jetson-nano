@@ -58,10 +58,11 @@ else
     PY_INC=$(python3 -c "import sysconfig; print(sysconfig.get_path('include'))")
     NUMPY_INC=$(python3 -c "import numpy as np; print(np.get_include())")
 
-    # Chỉ định CMake dùng Python3 của VENV
+    # Chỉ định CMake dùng Python3 của VENV và chặn các tập lệnh x86 (AVX/SSE) bằng generic
     cmake -B build \
           -DFAISS_ENABLE_GPU=OFF \
           -DFAISS_ENABLE_PYTHON=ON \
+          -DFAISS_OPT_LEVEL=generic \
           -DPython_EXECUTABLE=$(which python3) \
           -DPython_INCLUDE_DIR=$PY_INC \
           -DPython_NumPy_INCLUDE_DIRS=$NUMPY_INC .
