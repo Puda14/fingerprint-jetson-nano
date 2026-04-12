@@ -7,6 +7,7 @@ dependency is unavailable.
 
 from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator, TypeVar, Type, Awaitable, Sequence, Mapping
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 
@@ -51,6 +52,15 @@ class InferenceBackend(ABC):
     @abstractmethod
     def get_info(self) -> Dict[str, Any]:
         """Return model / backend metadata."""
+
+    @property
+    def expects_image_input(self) -> bool:
+        return False
+
+    def infer_image(self, image: np.ndarray) -> np.ndarray:
+        raise RuntimeError(
+            "%s does not support image-input inference" % self.__class__.__name__
+        )
 
     # Shared helpers -----------------------------------------------
 
@@ -315,17 +325,24 @@ class TensorRTBackend(InferenceBackend):
         self._model_path: Optional[str] = None
         self._trt = None
         self._cuda = None
+        self._cuda_context = None
         self._bindings: List[Dict[str, Any]] = []
+        self._input_bindings: List[Dict[str, Any]] = []
+        self._output_bindings: List[Dict[str, Any]] = []
         self._stream = None
+        self._input_mode: str = "graph"
+        self._image_input_shape: Optional[List[Any]] = None
+        self._image_layout: str = "nchw"
+        self._binding_lock = threading.Lock()
 
     def load(self, model_path: str) -> bool:
         try:
             import tensorrt as trt  # type: ignore[import-untyped]
             import pycuda.driver as cuda  # type: ignore[import-untyped]
-            import pycuda.autoinit  # type: ignore[import-untyped]  # noqa: F401
 
             self._trt = trt
             self._cuda = cuda
+            self._cuda.init()
         except ImportError as exc:
             logger.error(
                 "TensorRT or PyCUDA not available: %s. "
@@ -337,6 +354,9 @@ class TensorRTBackend(InferenceBackend):
         trt_logger = self._trt.Logger(self._trt.Logger.WARNING)
 
         try:
+            device = self._cuda.Device(0)
+            self._cuda_context = device.make_context()
+
             with open(model_path, "rb") as f:
                 engine_data = f.read()
 
@@ -347,12 +367,19 @@ class TensorRTBackend(InferenceBackend):
                 return False
 
             self._context = self._engine.create_execution_context()
+            if hasattr(self._context, "active_optimization_profile"):
+                self._context.active_optimization_profile = 0
             self._stream = self._cuda.Stream()
             self._model_path = model_path
 
-            # Pre-allocate bindings
+            # Inspect active-profile bindings only. TensorRT reports bindings
+            # for every optimization profile, but only profile 0 is used here.
             self._bindings = []
-            for i in range(self._engine.num_bindings):
+            num_profiles = max(
+                int(getattr(self._engine, "num_optimization_profiles", 1) or 1), 1
+            )
+            bindings_per_profile = max(int(self._engine.num_bindings / num_profiles), 1)
+            for i in range(bindings_per_profile):
                 name = self._engine.get_binding_name(i)
                 dtype = self._trt.nptype(self._engine.get_binding_dtype(i))
                 shape = self._engine.get_binding_shape(i)
@@ -367,91 +394,170 @@ class TensorRTBackend(InferenceBackend):
                     }
                 )
 
+            self._input_bindings = [b for b in self._bindings if b["is_input"]]
+            self._output_bindings = [b for b in self._bindings if not b["is_input"]]
+
+            if len(self._input_bindings) == 1 and len(self._input_bindings[0]["shape"]) == 4:
+                self._input_mode = "image"
+                self._image_input_shape = list(self._input_bindings[0]["shape"])
+                c_first = (
+                    self._image_input_shape[1]
+                    if len(self._image_input_shape) > 1
+                    else None
+                )
+                c_last = (
+                    self._image_input_shape[3]
+                    if len(self._image_input_shape) > 3
+                    else None
+                )
+                if c_last in (1, 3) and c_first not in (1, 3):
+                    self._image_layout = "nhwc"
+                else:
+                    self._image_layout = "nchw"
+            else:
+                self._input_mode = "graph"
+
             logger.info(
                 "TensorRT engine loaded from %s (%d bindings)",
                 model_path,
                 len(self._bindings),
             )
+            logger.info("TensorRT input mode detected: %s", self._input_mode)
+            if self._input_mode == "image":
+                logger.info(
+                    "TensorRT image input: name=%s shape=%s layout=%s",
+                    self._input_bindings[0]["name"],
+                    self._image_input_shape,
+                    self._image_layout,
+                )
             return True
         except Exception as exc:
             logger.error("TensorRT load failed for %s: %s", model_path, exc)
             return False
+        finally:
+            if self._cuda_context is not None:
+                try:
+                    self._cuda_context.pop()
+                except Exception:
+                    pass
 
-    def infer(self, graph_data: GraphData) -> np.ndarray:
-        if self._engine is None or self._context is None:
+    @property
+    def expects_image_input(self) -> bool:
+        return self._input_mode == "image"
+
+    def _prepare_image_input(self, image: np.ndarray) -> np.ndarray:
+        if image.ndim != 2:
+            raise ValueError("Expected grayscale image with shape (H, W)")
+
+        target_h = None
+        target_w = None
+        if self._image_input_shape is not None and len(self._image_input_shape) == 4:
+            if self._image_layout == "nchw":
+                h_val = self._image_input_shape[2]
+                w_val = self._image_input_shape[3]
+            else:
+                h_val = self._image_input_shape[1]
+                w_val = self._image_input_shape[2]
+
+            if isinstance(h_val, int) and h_val > 0:
+                target_h = h_val
+            if isinstance(w_val, int) and w_val > 0:
+                target_w = w_val
+
+        if target_h is not None and target_w is not None and image.shape != (target_h, target_w):
+            import cv2
+
+            image = cv2.resize(image, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+        img = image.astype(np.float32)
+        if img.max() > 1.0:
+            img = img / 255.0
+
+        if self._image_layout == "nhwc":
+            return img[np.newaxis, :, :, np.newaxis]
+        return img[np.newaxis, np.newaxis, :, :]
+
+    def _run_inference(self, inputs: List[np.ndarray]) -> np.ndarray:
+        if self._engine is None or self._context is None or self._cuda_context is None:
             raise RuntimeError("TensorRT engine not loaded. Call load() first.")
 
+        if len(inputs) != len(self._input_bindings):
+            raise RuntimeError(
+                "TensorRT engine expects %d inputs but received %d"
+                % (len(self._input_bindings), len(inputs))
+            )
+
         cuda = self._cuda
-        n = graph_data.num_nodes
-        k = graph_data.edge_index.shape[1] if graph_data.edge_index.ndim == 2 else 0
+        with self._binding_lock:
+            self._cuda_context.push()
+            try:
+                binding_ptrs: List[int] = [0] * int(self._engine.num_bindings)
+                device_buffers: List[Any] = []
+                host_outputs: List[np.ndarray] = []
+                output_device_buffers: List[Any] = []
 
-        # Prepare host buffers and set dynamic shapes
-        host_inputs: List[np.ndarray] = []
-        host_outputs: List[np.ndarray] = []
-        device_buffers: List[Any] = []
-        buffer_ptrs: List[int] = []
+                for binding, data in zip(self._input_bindings, inputs):
+                    host_buf = np.ascontiguousarray(data, dtype=binding["dtype"])
+                    if host_buf.ndim < len(binding["shape"]):
+                        host_buf = host_buf[np.newaxis, ...]
 
-        input_data_map = {
-            0: graph_data.node_features.astype(np.float32),
-            1: graph_data.edge_index.astype(np.int32),
-            2: graph_data.relational_features.astype(np.float32),
-        }
+                    self._context.set_binding_shape(binding["index"], tuple(host_buf.shape))
+                    dev_buf = cuda.mem_alloc(host_buf.nbytes)
+                    device_buffers.append(dev_buf)
+                    binding_ptrs[binding["index"]] = int(dev_buf)
+                    cuda.memcpy_htod_async(dev_buf, host_buf, self._stream)
 
-        input_idx = 0
-        for binding in self._bindings:
-            if binding["is_input"]:
-                data = input_data_map.get(input_idx)
-                if data is None:
-                    raise RuntimeError(
-                        f"No input data for binding index {input_idx}"
-                    )
-                # Add batch dim
-                if data.ndim < len(binding["shape"]):
-                    data = data[np.newaxis, ...]
-                # Set dynamic shape
-                self._context.set_binding_shape(binding["index"], data.shape)
-                host_buf = np.ascontiguousarray(data)
-                host_inputs.append(host_buf)
-                dev_buf = cuda.mem_alloc(host_buf.nbytes)
-                device_buffers.append(dev_buf)
-                buffer_ptrs.append(int(dev_buf))
-                input_idx += 1
-            else:
-                shape = tuple(
-                    self._context.get_binding_shape(binding["index"])
+                for binding in self._output_bindings:
+                    shape = tuple(self._context.get_binding_shape(binding["index"]))
+                    host_buf = np.empty(shape, dtype=binding["dtype"])
+                    dev_buf = cuda.mem_alloc(host_buf.nbytes)
+                    device_buffers.append(dev_buf)
+                    output_device_buffers.append(dev_buf)
+                    host_outputs.append(host_buf)
+                    binding_ptrs[binding["index"]] = int(dev_buf)
+
+                self._context.execute_async_v2(
+                    bindings=binding_ptrs, stream_handle=self._stream.handle
                 )
-                host_buf = np.empty(shape, dtype=binding["dtype"])
-                host_outputs.append(host_buf)
-                dev_buf = cuda.mem_alloc(host_buf.nbytes)
-                device_buffers.append(dev_buf)
-                buffer_ptrs.append(int(dev_buf))
 
-        # H2D transfer
-        for h_in, d_buf in zip(host_inputs, device_buffers[: len(host_inputs)]):
-            cuda.memcpy_htod_async(d_buf, h_in, self._stream)
+                for host_buf, dev_buf in zip(host_outputs, output_device_buffers):
+                    cuda.memcpy_dtoh_async(host_buf, dev_buf, self._stream)
 
-        # Execute
-        self._context.execute_async_v2(
-            bindings=buffer_ptrs, stream_handle=self._stream.handle
-        )
+                self._stream.synchronize()
+                embedding = host_outputs[0].squeeze().astype(np.float32)
+                return self._l2_normalize(embedding)
+            finally:
+                try:
+                    self._cuda_context.pop()
+                except Exception:
+                    pass
 
-        # D2H transfer
-        out_offset = len(host_inputs)
-        for h_out, d_buf in zip(
-            host_outputs, device_buffers[out_offset:]
-        ):
-            cuda.memcpy_dtoh_async(h_out, d_buf, self._stream)
+    def infer_image(self, image: np.ndarray) -> np.ndarray:
+        if self._input_mode != "image":
+            raise RuntimeError(
+                "Loaded TensorRT engine expects graph input; use infer() path."
+            )
+        return self._run_inference([self._prepare_image_input(image)])
 
-        self._stream.synchronize()
+    def infer(self, graph_data: GraphData) -> np.ndarray:
+        if self._input_mode == "image":
+            raise RuntimeError(
+                "Loaded TensorRT engine expects image input; use infer_image() path."
+            )
 
-        embedding = host_outputs[0].squeeze().astype(np.float32)
-        return self._l2_normalize(embedding)
+        input_tensors = [
+            graph_data.node_features.astype(np.float32),
+            graph_data.edge_index.astype(np.int32),
+            graph_data.relational_features.astype(np.float32),
+        ]
+        return self._run_inference(input_tensors)
 
     def get_info(self) -> Dict[str, Any]:
         info: Dict[str, Any] = {
             "backend": "tensorrt",
             "model_path": self._model_path,
             "loaded": self._engine is not None,
+            "input_mode": self._input_mode,
         }
         if self._bindings:
             info["bindings"] = [

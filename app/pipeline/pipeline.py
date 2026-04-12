@@ -219,11 +219,14 @@ class VerificationPipeline:
 
         # Some ONNX models consume image tensors directly (NCHW). In that case,
         # skip minutiae/graph stages and infer straight from the preprocessed image.
-        if isinstance(self._backend, ONNXBackend) and self._backend.expects_image_input:
+        if self._backend.expects_image_input:
             self._profiler.start("inference")
-            embedding = await loop.run_in_executor(
-                None, self._backend.infer_image, preprocessed
-            )
+            if isinstance(self._backend, TensorRTBackend):
+                embedding = self._backend.infer_image(preprocessed)
+            else:
+                embedding = await loop.run_in_executor(
+                    None, self._backend.infer_image, preprocessed
+                )
             self._profiler.stop("inference")
             return self._fit_embedding_dim(embedding), self._profiler.get_report()
 
@@ -248,9 +251,12 @@ class VerificationPipeline:
 
         # Step 4: Run model inference
         self._profiler.start("inference")
-        embedding = await loop.run_in_executor(
-            None, self._backend.infer, graph
-        )
+        if isinstance(self._backend, TensorRTBackend):
+            embedding = self._backend.infer(graph)
+        else:
+            embedding = await loop.run_in_executor(
+                None, self._backend.infer, graph
+            )
         self._profiler.stop("inference")
 
         return self._fit_embedding_dim(embedding), self._profiler.get_report()
