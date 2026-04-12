@@ -25,7 +25,10 @@ python-dateutil>=2.8.2,<3.0.0
 # opencv-contrib-python: use system OpenCV on Jetson Nano (pre-installed by NVIDIA with CUDA)
 pillow>=8.0.0,<10.0
 # faiss-cpu: PyPI does not have ARM64 wheels for Python 3.6. You must compile from source
-onnxruntime>=1.8.0,<2.0
+# onnxruntime is intentionally excluded from the default Jetson TensorRT setup.
+# On Jetson Nano / Python 3.6 we rely on the system NumPy/OpenCV stack, while
+# pip onnxruntime often pulls in an incompatible binary combination and dirties
+# the shared venv. Install it only in a separate ONNX/dev environment if needed.
 
 # --- CLI --------------------------------------------------------------------
 click>=7.0,<8.1.0
