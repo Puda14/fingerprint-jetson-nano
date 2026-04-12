@@ -431,9 +431,12 @@ def convert_onnx_to_trt(
 
     # Build config
     config = builder.create_builder_config()
-    config.set_memory_pool_limit(
-        trt.MemoryPoolType.WORKSPACE, max_workspace_mb * (1 << 20)
-    )
+    # TRT 8.4+ uses set_memory_pool_limit; older (Jetson JetPack 4.x) uses max_workspace_size
+    workspace_bytes = max_workspace_mb * (1 << 20)
+    if hasattr(config, "set_memory_pool_limit"):
+        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
+    else:
+        config.max_workspace_size = workspace_bytes  # TRT 8.2 / 8.3
 
     if fp16 and builder.platform_has_fast_fp16:
         logger.info("Enabling FP16 precision")
