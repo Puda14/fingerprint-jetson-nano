@@ -144,6 +144,20 @@ class VerificationPipeline:
         # FAISS index
         self._faiss = FAISSIndexManager(dim=self._embedding_dim)
 
+    def reload_backend(self, model_path: str) -> bool:
+        """Hot-reload the model inference engine with a new model path."""
+        logger.info("VerficationPipeline: reloading model %s...", model_path)
+        try:
+            loaded = self._backend.load(model_path)
+            if loaded:
+                logger.info("Successfully reloaded model: %s", model_path)
+            else:
+                logger.error("Failed to reload model: %s", model_path)
+            return loaded
+        except Exception as exc:
+            logger.error("Error reloading model %s: %s", model_path, exc)
+            return False
+
     # ------------------------------------------------------------------
     # Core pipeline
     # ------------------------------------------------------------------

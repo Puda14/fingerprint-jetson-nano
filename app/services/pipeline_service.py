@@ -155,8 +155,15 @@ class PipelineService:
         pipeline_cfg = self._settings.as_pipeline_config()
         self._pipeline = VerificationPipeline(pipeline_cfg)
 
-        # Determine which model loaded
-        model_path = self._settings.model_path
+        # Determine which model to load via ModelService first
+        try:
+            from app.services.model_service import get_model_service_sync
+            svc = get_model_service_sync()
+            msvc_path = svc.get_model_path_by_type("embedding")
+        except Exception:
+            msvc_path = None
+
+        model_path = msvc_path or self._settings.model_path
         if model_path and Path(model_path).exists():
             self._active_model = Path(model_path).name
             self._model_loaded = True
@@ -1129,6 +1136,29 @@ class PipelineService:
         except Exception as exc:
             logger.error("Sync enrollment failed: %s", exc)
             return False
+
+    def reload_models(self) -> None:
+        """Dynamically detect and reload the active model (called after MQTT update)."""
+        logger.info("Reloading active models...")
+        try:
+            from app.services.model_service import get_model_service_sync
+            svc = get_model_service_sync()
+            msvc_path = svc.get_model_path_by_type("embedding")
+        except Exception:
+            msvc_path = None
+
+        model_path = msvc_path or self._settings.model_path
+        if model_path and Path(model_path).exists():
+            self._active_model = Path(model_path).name
+            loaded = self._pipeline.reload_backend(model_path)
+            if loaded:
+                self._model_loaded = True
+                logger.info("Model successfully reloaded: %s", model_path)
+            else:
+                self._model_loaded = False
+                logger.error("Failed to reload model: %s", model_path)
+        else:
+            logger.warning("No valid model path to reload.")
 
 
 # ---------------------------------------------------------------------------

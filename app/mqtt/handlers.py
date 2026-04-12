@@ -247,6 +247,14 @@ def _handle_model_update(mqtt_client_ref: Any, payload: ModelUpdatePayload) -> N
         # Publish: ready
         _publish_model_status(mqtt_client_ref, worker_id, payload, "ready")
 
+        # Dynamically reload models
+        try:
+            from app.services.pipeline_service import get_pipeline_service_sync
+            svc = get_pipeline_service_sync()
+            svc.reload_models()
+        except Exception as exc:
+            logger.error("Failed to dynamically reload model: %s", exc)
+
     finally:
         mqtt_client_ref.current_task_id = None
 
