@@ -21,7 +21,7 @@ python-dateutil>=2.8.2,<3.0.0
 # sudo apt-get install python3-cryptography
 
 # --- Numerical / ML --------------------------------------------------------
-numpy>=1.19.0,<2.1
+# numpy>=1.19.0,<2.1 # Bị comment out để dùng numpy 1.13.3 có sẵn của Jetpack (tránh lỗi Illegal instruction)
 # opencv-contrib-python: use system OpenCV on Jetson Nano (pre-installed by NVIDIA with CUDA)
 pillow>=8.0.0,<10.0
 # faiss-cpu: PyPI does not have ARM64 wheels for Python 3.6. You must compile from source
