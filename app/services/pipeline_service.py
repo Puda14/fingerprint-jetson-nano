@@ -10,6 +10,7 @@ from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Call
 import asyncio
 import json
 import logging
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -88,6 +89,10 @@ class IdentifyResult:
         self.employee_id = employee_id
         self.full_name = full_name
         self.score = score
+
+
+class DuplicateUserError(ValueError):
+    """Raised when a user cannot be created because employee_id already exists."""
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +290,14 @@ class PipelineService:
             role=user_data.get("role", "user"),
         )
         loop = asyncio.get_event_loop()
-        created = await loop.run_in_executor(None, self._user_repo.create, user)
+        try:
+            created = await loop.run_in_executor(None, self._user_repo.create, user)
+        except sqlite3.IntegrityError as exc:
+            if "users.employee_id" in str(exc):
+                raise DuplicateUserError(
+                    "Employee ID already exists"
+                ) from exc
+            raise
         return created.to_dict()
 
     async def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:

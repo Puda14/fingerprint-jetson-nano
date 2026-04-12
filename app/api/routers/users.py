@@ -22,7 +22,11 @@ from app.api.schemas import (
     UserResponse,
     UserUpdate,
 )
-from app.services.pipeline_service import PipelineService, get_pipeline_service
+from app.services.pipeline_service import (
+    DuplicateUserError,
+    PipelineService,
+    get_pipeline_service,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -37,7 +41,10 @@ async def create_user(
     body: UserCreate,
     pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
-    user = await pipeline.create_user(model_dump_compat(body))
+    try:
+        user = await pipeline.create_user(model_dump_compat(body))
+    except DuplicateUserError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     return ApiResponse(
         success=True,
         data=_to_user_response(user),
