@@ -21,7 +21,7 @@ cryptography>=3.4.0,<44.0
 
 # --- Numerical / ML --------------------------------------------------------
 numpy>=1.19.0,<2.1
-opencv-contrib-python>=4.5.0,<5.0
+# opencv-contrib-python: use system OpenCV on Jetson Nano (pre-installed by NVIDIA with CUDA)
 pillow>=8.0.0,<10.0
 faiss-cpu>=1.7.0,<2.0
 onnxruntime>=1.8.0,<2.0
