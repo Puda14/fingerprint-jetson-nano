@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import List, Optional, Any
 
 import numpy as np
 
@@ -92,7 +92,7 @@ class InferenceBackend(ABC):
         Returns:
             Dict with ``avg_ms``, ``min_ms``, ``max_ms``, ``p95_ms``.
         """
-        latencies: list[float] = []
+        latencies: List[float] = []
         for _ in range(iterations):
             t0 = time.perf_counter()
             self.infer(graph_data)
@@ -118,11 +118,11 @@ class ONNXBackend(InferenceBackend):
 
     def __init__(self) -> None:
         self._session = None
-        self._model_path: str | None = None
+        self._model_path: Optional[str] = None
         self._ort = None
         self._input_mode: str = "graph"
-        self._image_input_name: str | None = None
-        self._image_input_shape: list[Any] | None = None
+        self._image_input_name: Optional[str] = None
+        self._image_input_shape: List[Any] | None = None
         self._image_layout: str = "nchw"
 
     def load(self, model_path: str) -> bool:
@@ -313,10 +313,10 @@ class TensorRTBackend(InferenceBackend):
     def __init__(self) -> None:
         self._engine = None
         self._context = None
-        self._model_path: str | None = None
+        self._model_path: Optional[str] = None
         self._trt = None
         self._cuda = None
-        self._bindings: list[dict[str, Any]] = []
+        self._bindings: List[dict[str, Any]] = []
         self._stream = None
 
     def load(self, model_path: str) -> bool:
@@ -387,10 +387,10 @@ class TensorRTBackend(InferenceBackend):
         k = graph_data.edge_index.shape[1] if graph_data.edge_index.ndim == 2 else 0
 
         # Prepare host buffers and set dynamic shapes
-        host_inputs: list[np.ndarray] = []
-        host_outputs: list[np.ndarray] = []
-        device_buffers: list[Any] = []
-        buffer_ptrs: list[int] = []
+        host_inputs: List[np.ndarray] = []
+        host_outputs: List[np.ndarray] = []
+        device_buffers: List[Any] = []
+        buffer_ptrs: List[int] = []
 
         input_data_map = {
             0: graph_data.node_features.astype(np.float32),

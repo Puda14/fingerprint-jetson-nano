@@ -6,15 +6,15 @@ import json
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import List, Optional, Any
 
 
 @dataclass
 class _StageRecord:
     """Accumulated timing data for a single pipeline stage."""
 
-    durations: list[float] = field(default_factory=list)
-    _start_time: float | None = field(default=None, repr=False)
+    durations: List[float] = field(default_factory=list)
+    _start_time: Optional[float] = field(default=None, repr=False)
 
 
 class PipelineProfiler:
@@ -109,7 +109,7 @@ class PipelineProfiler:
         with self._lock:
             self._stages.clear()
 
-    def export_json(self, path: str | None = None) -> str:
+    def export_json(self, path: Optional[str] = None) -> str:
         """Export the report as a JSON string.
 
         If *path* is given the JSON is also written to that file.

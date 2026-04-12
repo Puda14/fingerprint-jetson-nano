@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from typing import Any
+from typing import List, Optional, Any
 
 import paho.mqtt.client as mqtt
 

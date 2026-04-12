@@ -1,3 +1,4 @@
+from typing import List, Optional
 """Dynamic k-NN graph construction for MDGTv2 minutiae sets."""
 
 from __future__ import annotations
@@ -59,7 +60,7 @@ class DynamicGraphBuilder:
     # Public API
     # ------------------------------------------------------------------
 
-    def build_feature_matrix(self, minutiae: list[Minutia]) -> np.ndarray:
+    def build_feature_matrix(self, minutiae: List[Minutia]) -> np.ndarray:
         """Create the (N, 5) node feature matrix.
 
         Columns:
@@ -88,7 +89,7 @@ class DynamicGraphBuilder:
             features[i, 4] = 1.0 if m.type == MinutiaeType.BIFURCATION else 0.0
         return features
 
-    def compute_relational_features(self, minutiae: list[Minutia]) -> np.ndarray:
+    def compute_relational_features(self, minutiae: List[Minutia]) -> np.ndarray:
         """Compute the (N, N, 7) pairwise relational positional encoding.
 
         For each pair (i, j):
@@ -177,7 +178,7 @@ class DynamicGraphBuilder:
 
         return indices.astype(np.int32)
 
-    def build(self, minutiae: list[Minutia], k: int = 16) -> GraphData:
+    def build(self, minutiae: List[Minutia], k: int = 16) -> GraphData:
         """Full graph construction pipeline.
 
         Args:

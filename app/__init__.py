@@ -1,3 +1,4 @@
+from typing import List, Optional
 """
 Fingerprint Jetson Nano Worker Application.
 

@@ -11,7 +11,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import List, Optional, Any, Callable, Dict, Optional
 
 import paho.mqtt.client as mqtt
 

@@ -13,7 +13,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import List, Optional, Any, Optional
 
 import numpy as np
 
@@ -102,22 +102,22 @@ class PipelineService:
     Uses singleton pattern to ensure resources are initialized only once.
     """
 
-    _instance: PipelineService | None = None
+    _instance: Optional[PipelineService] = None
 
     def __init__(self) -> None:
         self._settings = get_settings()
-        self._pipeline: VerificationPipeline | None = None
-        self._active_model: str | None = None
+        self._pipeline: Optional[VerificationPipeline] = None
+        self._active_model: Optional[str] = None
         self._model_loaded: bool = False
         self._start_time: float = time.time()
         self._lock = asyncio.Lock()
 
         # DB components (initialized in initialize())
-        self._db: DatabaseManager | None = None
-        self._user_repo: UserRepository | None = None
-        self._fp_repo: FingerprintRepository | None = None
-        self._log_repo: VerificationLogRepository | None = None
-        self._crypto: CryptoService | None = None
+        self._db: Optional[DatabaseManager] = None
+        self._user_repo: Optional[UserRepository] = None
+        self._fp_repo: Optional[FingerprintRepository] = None
+        self._log_repo: Optional[VerificationLogRepository] = None
+        self._crypto: Optional[CryptoService] = None
         self._sync_lock = threading.Lock()
         self._sync_state_file = Path(self._settings.data_dir) / ".enrollment_sync_state.json"
 
@@ -232,7 +232,7 @@ class PipelineService:
     # -- properties ----------------------------------------------------------
 
     @property
-    def active_model(self) -> str | None:
+    def active_model(self) -> Optional[str]:
         return self._active_model
 
     @property
@@ -269,10 +269,10 @@ class PipelineService:
         self,
         page: int = 1,
         limit: int = 20,
-        search: str | None = None,
-        department: str | None = None,
-        role: str | None = None,
-    ) -> tuple[list[dict[str, Any]], int]:
+        search: Optional[str] = None,
+        department: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> tuple[List[dict[str, Any]], int]:
         if self._user_repo is None:
             return [], 0
 
@@ -341,7 +341,7 @@ class PipelineService:
         user_id: int,
         finger: int,
         num_samples: int = 3,
-        image_bytes: bytes | None = None,
+        image_bytes: Optional[bytes] = None,
     ) -> EnrollResult:
         """Enroll a fingerprint using sensor capture or provided image bytes.
 
@@ -482,7 +482,7 @@ class PipelineService:
     async def verify_1to1(
         self,
         user_id: int,
-        image_bytes: bytes | None = None,
+        image_bytes: Optional[bytes] = None,
     ) -> VerifyResult:
         """1:1 verification against a specific user's stored embeddings."""
         start = time.perf_counter()
@@ -624,9 +624,9 @@ class PipelineService:
 
     async def identify_1toN(
         self,
-        top_k: int | None = None,
-        image_bytes: bytes | None = None,
-    ) -> list[IdentifyResult]:
+        top_k: Optional[int] = None,
+        image_bytes: Optional[bytes] = None,
+    ) -> List[IdentifyResult]:
         """1:N identification — search FAISS gallery for the best match."""
         top_k = top_k or self._settings.identify_top_k
         threshold = self._settings.identify_threshold
@@ -659,7 +659,7 @@ class PipelineService:
         elapsed = (time.perf_counter() - start) * 1000
 
         # Map fp_id → user info from DB
-        results: list[IdentifyResult] = []
+        results: List[IdentifyResult] = []
         if self._fp_repo is not None and self._user_repo is not None:
             loop = asyncio.get_running_loop()
             for fp_id, score in matches:
@@ -736,12 +736,12 @@ class PipelineService:
         self,
         page: int = 1,
         limit: int = 50,
-        user_id: int | None = None,
-        action: str | None = None,
-        decision: str | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
-    ) -> tuple[list[dict[str, Any]], int]:
+        user_id: Optional[int] = None,
+        action: Optional[str] = None,
+        decision: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> tuple[List[dict[str, Any]], int]:
         if self._log_repo is None:
             return [], 0
 
@@ -805,7 +805,7 @@ class PipelineService:
             logger.warning("Failed to save enrollment sync state: %s", exc)
 
     @staticmethod
-    def _payload_fp_id(payload: dict[str, Any]) -> int | None:
+    def _payload_fp_id(payload: dict[str, Any]) -> Optional[int]:
         try:
             fp = payload.get("fingerprint", {})
             fp_id = fp.get("fp_id")
@@ -863,9 +863,9 @@ class PipelineService:
         user_obj: Any,
         fp_id: int,
         finger_index: int,
-        embedding_list: list[float],
+        embedding_list: List[float],
         quality_score: float,
-        image_bytes: bytes | None = None,
+        image_bytes: Optional[bytes] = None,
     ) -> dict[str, Any]:
         import base64
 
@@ -963,7 +963,7 @@ class PipelineService:
         with self._sync_lock:
             state = self._load_sync_state()
             pending = state.get("pending_events", [])
-            still_pending: list[dict[str, Any]] = []
+            still_pending: List[dict[str, Any]] = []
             synced = {int(x) for x in state.get("synced_fp_ids", [])}
 
             for payload in pending:
@@ -990,9 +990,9 @@ class PipelineService:
         user_obj: Any,
         fp_id: int,
         finger_index: int,
-        embedding_list: list[float],
+        embedding_list: List[float],
         quality_score: float,
-        image_bytes: bytes | None = None,
+        image_bytes: Optional[bytes] = None,
     ) -> None:
         """Publish a new enrollment event to orchestrator via MQTT.
 

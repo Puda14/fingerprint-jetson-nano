@@ -13,7 +13,7 @@ import logging
 import os
 import struct
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Optional
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC

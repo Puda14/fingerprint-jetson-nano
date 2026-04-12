@@ -1,3 +1,4 @@
+from typing import List, Optional
 """
 Centralized configuration for Fingerprint Jetson Nano Worker.
 
@@ -124,7 +125,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # CORS — allowed origins to access API
     # -------------------------------------------------------------------------
-    cors_origins: list[str] = [
+    cors_origins: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8080",

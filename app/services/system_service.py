@@ -11,7 +11,7 @@ import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import List, Optional, Any
 
 from app.core.config import get_settings
 
@@ -30,7 +30,7 @@ class SystemService:
     # -- health --------------------------------------------------------------
 
     async def get_health(
-        self, sensor_connected: bool = False, active_model: str | None = None
+        self, sensor_connected: bool = False, active_model: Optional[str] = None
     ) -> dict[str, Any]:
         """Collect system health metrics."""
         try:
@@ -70,7 +70,7 @@ class SystemService:
 
     # -- temperature helpers (Jetson-specific) -------------------------------
 
-    async def _read_cpu_temp(self) -> float | None:
+    async def _read_cpu_temp(self) -> Optional[float]:
         """Read CPU temperature on Linux / Jetson Nano."""
         thermal_path = Path("/sys/class/thermal/thermal_zone0/temp")
         if thermal_path.exists():
@@ -81,7 +81,7 @@ class SystemService:
                 pass
         return None
 
-    async def _read_gpu_temp(self) -> float | None:
+    async def _read_gpu_temp(self) -> Optional[float]:
         """Read GPU temperature on Jetson (thermal_zone1)."""
         thermal_path = Path("/sys/class/thermal/thermal_zone1/temp")
         if thermal_path.exists():
@@ -149,7 +149,7 @@ class SystemService:
 
     # -- device listing ------------------------------------------------------
 
-    async def list_devices(self) -> list[dict[str, Any]]:
+    async def list_devices(self) -> List[dict[str, Any]]:
         hostname = socket.gethostname()
         try:
             ip = socket.gethostbyname(hostname)
@@ -170,7 +170,7 @@ class SystemService:
 # Dependency injection
 # ---------------------------------------------------------------------------
 
-_instance: SystemService | None = None
+_instance: Optional[SystemService] = None
 
 
 def get_system_service() -> SystemService:

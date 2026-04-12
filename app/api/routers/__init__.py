@@ -1,3 +1,4 @@
+from typing import List, Optional
 """Aggregate all API routers for clean import in main.py."""
 
 from app.api.routers.users import router as users_router

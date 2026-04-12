@@ -12,7 +12,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import List, Optional, Any, Generator, Optional
 
 logger = logging.getLogger(__name__)
 

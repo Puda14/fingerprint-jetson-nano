@@ -50,8 +50,8 @@ class FAISSIndexManager:
         self._next_internal_id = 0
 
         # Numpy fallback storage
-        self._np_embeddings: np.ndarray | None = None
-        self._np_ids: np.ndarray | None = None
+        self._np_embeddings: np.Optional[ndarray] = None
+        self._np_ids: np.Optional[ndarray] = None
 
     # ------------------------------------------------------------------
     # Build / rebuild
@@ -133,7 +133,7 @@ class FAISSIndexManager:
 
     def search(
         self, query: np.ndarray, top_k: int = 5
-    ) -> list[tuple[int, float]]:
+    ) -> List[tuple[int, float]]:
         """Search the index for the closest embeddings.
 
         Args:
@@ -151,12 +151,12 @@ class FAISSIndexManager:
 
     def _search_faiss(
         self, query: np.ndarray, top_k: int
-    ) -> list[tuple[int, float]]:
+    ) -> List[tuple[int, float]]:
         if self._index is None or self._index.ntotal == 0:
             return []
         k = min(top_k, self._index.ntotal)
         distances, indices = self._index.search(query, k)
-        results: list[tuple[int, float]] = []
+        results: List[tuple[int, float]] = []
         for dist, idx in zip(distances[0], indices[0]):
             if idx < 0:
                 continue
@@ -166,14 +166,14 @@ class FAISSIndexManager:
 
     def _search_numpy(
         self, query: np.ndarray, top_k: int
-    ) -> list[tuple[int, float]]:
+    ) -> List[tuple[int, float]]:
         if self._np_embeddings is None or len(self._np_embeddings) == 0:
             return []
         scores = (self._np_embeddings @ query.T).squeeze()
         k = min(top_k, len(scores))
         top_indices = np.argpartition(-scores, k)[:k]
         top_indices = top_indices[np.argsort(-scores[top_indices])]
-        results: list[tuple[int, float]] = []
+        results: List[tuple[int, float]] = []
         for idx in top_indices:
             results.append((int(self._np_ids[idx]), float(scores[idx])))  # type: ignore[index]
         return results

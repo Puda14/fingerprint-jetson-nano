@@ -8,7 +8,7 @@ import json
 import logging
 import time
 try:
-    from typing import Annotated
+    from typing import List, Optional, Annotated
 except ImportError:
     from typing_extensions import Annotated
 
@@ -169,7 +169,7 @@ async def ws_sensor_stream(websocket: WebSocket) -> None:
                     break
             await asyncio.sleep(1.0 / target_fps)
 
-    stream_task: asyncio.Task | None = None
+    stream_task: asyncio.Optional[Task] = None
 
     try:
         while True:

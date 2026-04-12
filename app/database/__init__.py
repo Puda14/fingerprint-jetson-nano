@@ -1,3 +1,4 @@
+from typing import List, Optional
 """Database layer for local fingerprint storage.
 
 Ported from jetson-fingerverify-app/mdgt_edge/database.

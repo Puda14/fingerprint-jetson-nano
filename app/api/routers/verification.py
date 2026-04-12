@@ -8,7 +8,7 @@ import json
 import logging
 import time
 try:
-    from typing import Annotated
+    from typing import List, Optional, Annotated
 except ImportError:
     from typing_extensions import Annotated
 

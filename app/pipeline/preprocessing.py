@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from typing import List, Optional, Any
 
 import cv2
 import numpy as np
@@ -67,7 +67,7 @@ class FingerprintPreprocessor:
         enhanced = clahe.apply(image)
 
         # Gabor filtering -- take the maximum response across orientations
-        gabor_responses: list[np.ndarray] = []
+        gabor_responses: List[np.ndarray] = []
         for kern in self._gabor_kernels:
             filtered = cv2.filter2D(enhanced, cv2.CV_64F, kern)
             gabor_responses.append(np.abs(filtered))
@@ -117,7 +117,7 @@ class FingerprintPreprocessor:
         self,
         image: np.ndarray,
         target_dpi: int = 500,
-        source_dpi: int | None = None,
+        source_dpi: Optional[int] = None,
     ) -> np.ndarray:
         """Resize image so that its effective DPI matches *target_dpi*.
 
@@ -221,8 +221,8 @@ class FingerprintPreprocessor:
             return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         return image
 
-    def _build_gabor_bank(self) -> list[np.ndarray]:
-        kernels: list[np.ndarray] = []
+    def _build_gabor_bank(self) -> List[np.ndarray]:
+        kernels: List[np.ndarray] = []
         for i in range(self._GABOR_NUM_ORIENTATIONS):
             theta = i * math.pi / self._GABOR_NUM_ORIENTATIONS
             kern = cv2.getGaborKernel(

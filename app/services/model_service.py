@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import List, Optional, Any, Dict, Optional, Tuple
 
 import requests
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # In-memory registry: stores model info and tracks active model
 _model_registry: dict[str, dict[str, Any]] = {}
-_active_model_id: str | None = None
+_active_model_id: Optional[str] = None
 
 # State file for loaded models (persisted across restarts)
 _STATE_FILE = os.path.join(os.getcwd(), "models", "loaded_models.json")
@@ -79,10 +79,10 @@ class ModelService:
 
     # -- scan / list ---------------------------------------------------------
 
-    async def list_models(self) -> list[dict[str, Any]]:
+    async def list_models(self) -> List[dict[str, Any]]:
         """Scans models/ directory and returns metadata for each model file."""
         global _active_model_id
-        models: list[dict[str, Any]] = []
+        models: List[dict[str, Any]] = []
 
         if not self._model_dir.exists():
             return models
@@ -341,7 +341,7 @@ def _path_to_id(path: Path) -> str:
 # Dependency injection
 # ---------------------------------------------------------------------------
 
-_instance: ModelService | None = None
+_instance: Optional[ModelService] = None
 
 
 def get_model_service() -> ModelService:

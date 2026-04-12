@@ -1,3 +1,4 @@
+from typing import List, Optional
 """Sensor driver package — USB hardware driver and Mock driver."""
 from .sensor import (
     SensorDriver,

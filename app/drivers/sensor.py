@@ -8,7 +8,7 @@ on mdgt_edge package.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import List, Optional, Optional, Tuple
 from enum import IntEnum
 import threading
 
@@ -276,7 +276,7 @@ class MockSensorDriver(SensorDriver):
     def __init__(self, sample_dir: Optional[str] = None) -> None:
         self._connected = False
         self._finger_present = False
-        self._sample_images: list[bytes] = []
+        self._sample_images: List[bytes] = []
         self._sample_index: int = 0
         self._sample_dir = sample_dir or "data/sample"
 
@@ -286,7 +286,7 @@ class MockSensorDriver(SensorDriver):
         import glob
 
         patterns = ["*.tif", "*.bmp", "*.png", "*.jpg"]
-        files: list[str] = []
+        files: List[str] = []
         for pat in patterns:
             files.extend(sorted(glob.glob(os.path.join(self._sample_dir, pat))))
 

@@ -55,7 +55,7 @@ class MinutiaeExtractor(ABC):
     """Interface for minutiae extraction backends."""
 
     @abstractmethod
-    def extract(self, image: np.ndarray) -> list[Minutia]:
+    def extract(self, image: np.ndarray) -> List[Minutia]:
         """Extract minutiae from a preprocessed grayscale image.
 
         Args:
@@ -67,12 +67,12 @@ class MinutiaeExtractor(ABC):
 
     def filter_minutiae(
         self,
-        minutiae: list[Minutia],
+        minutiae: List[Minutia],
         image_shape: tuple[int, int],
         border_margin: int = 10,
         quality_threshold: float = 0.25,
         max_count: int = 200,
-    ) -> list[Minutia]:
+    ) -> List[Minutia]:
         """Remove false minutiae via border exclusion, quality gate, and cap.
 
         Args:
@@ -86,7 +86,7 @@ class MinutiaeExtractor(ABC):
             Filtered and sorted (by quality descending) minutiae.
         """
         h, w = image_shape[:2]
-        filtered: list[Minutia] = []
+        filtered: List[Minutia] = []
         for m in minutiae:
             if m.x < border_margin or m.x >= w - border_margin:
                 continue
@@ -144,7 +144,7 @@ class FingerNetExtractor(MinutiaeExtractor):
             )
             self._session = None
 
-    def extract(self, image: np.ndarray) -> list[Minutia]:
+    def extract(self, image: np.ndarray) -> List[Minutia]:
         if self._session is None:
             logger.error("FingerNet model not loaded; returning empty minutiae list.")
             return []
@@ -174,10 +174,10 @@ class FingerNetExtractor(MinutiaeExtractor):
         heatmap: np.ndarray,
         orientation: np.ndarray,
         type_map: np.ndarray,
-    ) -> list[Minutia]:
+    ) -> List[Minutia]:
         """Non-maximum suppression on the minutiae heatmap."""
         r = self._nms_radius
-        minutiae: list[Minutia] = []
+        minutiae: List[Minutia] = []
 
         # Dilate to find local maxima
         kernel = cv2.getStructuringElement(
@@ -234,7 +234,7 @@ class SimpleCNExtractor(MinutiaeExtractor):
         self._binarize_c = binarize_c
         self._quality_base = quality_base
 
-    def extract(self, image: np.ndarray) -> list[Minutia]:
+    def extract(self, image: np.ndarray) -> List[Minutia]:
         gray = image
         if gray.ndim == 3:
             gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
@@ -258,7 +258,7 @@ class SimpleCNExtractor(MinutiaeExtractor):
         minutiae = self._crossing_number(skeleton)
         return self.filter_minutiae(minutiae, image.shape[:2])
 
-    def _crossing_number(self, skeleton: np.ndarray) -> list[Minutia]:
+    def _crossing_number(self, skeleton: np.ndarray) -> List[Minutia]:
         """Detect ridge endings and bifurcations via the crossing number."""
         h, w = skeleton.shape
         # Normalize to 0/1
@@ -270,7 +270,7 @@ class SimpleCNExtractor(MinutiaeExtractor):
             (1, 1), (1, 0), (1, -1), (0, -1),
         ]
 
-        minutiae: list[Minutia] = []
+        minutiae: List[Minutia] = []
 
         for y in range(1, h - 1):
             for x in range(1, w - 1):
@@ -319,8 +319,8 @@ class SimpleCNExtractor(MinutiaeExtractor):
         skel: np.ndarray,
         x: int,
         y: int,
-        offsets: list[tuple[int, int]],
-        neighbours: list[int],
+        offsets: List[tuple[int, int]],
+        neighbours: List[int],
     ) -> float:
         """Rough orientation from the first ridge-pixel neighbour direction."""
         for idx, val in enumerate(neighbours):

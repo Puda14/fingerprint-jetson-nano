@@ -263,7 +263,7 @@ class VerificationPipeline:
         probe_image: bytes,
         top_k: int = 5,
         threshold: float = 0.50,
-    ) -> list[tuple[int, float]]:
+    ) -> List[tuple[int, float]]:
         """1:N Identification — search in FAISS gallery.
 
         Args:

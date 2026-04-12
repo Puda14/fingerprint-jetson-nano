@@ -24,8 +24,8 @@ class ApiResponse(BaseModel, Generic[DataT]):
     """Standard envelope returned by every endpoint."""
 
     success: bool = True
-    data: DataT | None = None
-    error: str | None = None
+    data: Optional[DataT] = None
+    error: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
@@ -77,9 +77,9 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: str | None = None
-    department: str | None = None
-    role: RoleLiteral | None = None
+    full_name: Optional[str] = None
+    department: Optional[str] = None
+    role: Optional[RoleLiteral] = None
 
     @validator("role", pre=True)
     @classmethod
@@ -103,7 +103,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool = True
     fingerprint_count: int = 0
-    enrolled_fingers: list[EnrolledFinger] = []
+    enrolled_fingers: List[EnrolledFinger] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -112,7 +112,7 @@ class UserResponse(BaseModel):
 
 
 class UserListResponse(BaseModel):
-    users: list[UserResponse]
+    users: List[UserResponse]
     pagination: PaginationMeta
 
 
@@ -123,7 +123,7 @@ class UserListResponse(BaseModel):
 
 class FingerprintResponse(BaseModel):
     finger: FingerEnum
-    image_base64: str | None = None
+    image_base64: Optional[str] = None
     quality_score: float = 0.0
     width: int = 0
     height: int = 0
@@ -149,7 +149,7 @@ class EnrollResponse(BaseModel):
 
 class VerifyRequest(BaseModel):
     user_id: str
-    image_base64: str | None = None
+    image_base64: Optional[str] = None
 
 
 class VerifyResponse(BaseModel):
@@ -162,7 +162,7 @@ class VerifyResponse(BaseModel):
 
 class IdentifyRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
-    image_base64: str | None = None
+    image_base64: Optional[str] = None
 
 
 class IdentifyCandidate(BaseModel):
@@ -174,7 +174,7 @@ class IdentifyCandidate(BaseModel):
 
 class IdentifyResponse(BaseModel):
     identified: bool
-    candidates: list[IdentifyCandidate]
+    candidates: List[IdentifyCandidate]
     threshold: float
     latency_ms: float
 
@@ -194,7 +194,7 @@ class ModelInfo(BaseModel):
 
 
 class ModelListResponse(BaseModel):
-    models: list[ModelInfo]
+    models: List[ModelInfo]
 
 
 class ModelUploadResponse(BaseModel):
@@ -227,17 +227,17 @@ class ProfileResponse(BaseModel):
 class LogEntry(BaseModel):
     id: str
     timestamp: datetime
-    user_id: str | None = None
-    employee_id: str | None = None
+    user_id: Optional[str] = None
+    employee_id: Optional[str] = None
     action: str  # "verify", "identify", "enroll"
     decision: str  # "accept", "reject", "error"
-    score: float | None = None
-    latency_ms: float | None = None
-    details: str | None = None
+    score: Optional[float] = None
+    latency_ms: Optional[float] = None
+    details: Optional[str] = None
 
 
 class LogListResponse(BaseModel):
-    logs: list[LogEntry]
+    logs: List[LogEntry]
     pagination: PaginationMeta
 
 
@@ -261,14 +261,14 @@ class SystemHealth(BaseModel):
     status: str = "healthy"
     uptime_seconds: float
     cpu_percent: float
-    cpu_temp_c: float | None = None
-    gpu_temp_c: float | None = None
+    cpu_temp_c: Optional[float] = None
+    gpu_temp_c: Optional[float] = None
     memory_used_mb: float
     memory_total_mb: float
     disk_used_gb: float
     disk_total_gb: float
     sensor_connected: bool
-    active_model: str | None = None
+    active_model: Optional[str] = None
     device_id: str
 
 
@@ -285,10 +285,10 @@ class ConfigResponse(BaseModel):
 
 
 class ConfigUpdateRequest(BaseModel):
-    verify_threshold: float | None = None
-    identify_threshold: float | None = None
-    identify_top_k: int | None = None
-    debug: bool | None = None
+    verify_threshold: Optional[float] = None
+    identify_threshold: Optional[float] = None
+    identify_top_k: Optional[int] = None
+    debug: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -298,19 +298,19 @@ class ConfigUpdateRequest(BaseModel):
 
 class SensorStatus(BaseModel):
     connected: bool
-    vendor_id: int | None = None
-    product_id: int | None = None
-    firmware_version: str | None = None
-    serial_number: str | None = None
-    resolution_dpi: int | None = None
-    user_count: int | None = None
-    compare_level: int | None = None
+    vendor_id: Optional[int] = None
+    product_id: Optional[int] = None
+    firmware_version: Optional[str] = None
+    serial_number: Optional[str] = None
+    resolution_dpi: Optional[int] = None
+    user_count: Optional[int] = None
+    compare_level: Optional[int] = None
     is_real_hardware: bool = False
 
 
 class CaptureResponse(BaseModel):
     success: bool
-    image_base64: str | None = None
+    image_base64: Optional[str] = None
     width: int = 0
     height: int = 0
     quality_score: float = 0.0
@@ -331,7 +331,7 @@ class LEDRequest(BaseModel):
 class DeviceInfo(BaseModel):
     device_id: str
     hostname: str
-    ip_address: str | None = None
+    ip_address: Optional[str] = None
     status: str = "online"
     last_seen: datetime = Field(default_factory=datetime.utcnow)
 

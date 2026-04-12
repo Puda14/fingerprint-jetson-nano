@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from functools import partial
-from typing import Optional
+from typing import List, Optional, Optional
 
 from app.drivers import (
     USBSensorDriver,
