@@ -218,6 +218,8 @@ compile_faiss_cpu() {
     source "$VENV_DIR/bin/activate"
 
     local faiss_dir="/tmp/faiss_build"
+    local swig_wrapper_dir=""
+    local swig_executable=""
     if python3 -c "import faiss" >/dev/null 2>&1; then
         echo "FAISS already available, skipping build"
         return 0
@@ -229,12 +231,30 @@ compile_faiss_cpu() {
 
     # Ubuntu 18.04 on Jetson Nano ships SWIG 3.0.x, while newer FAISS Python
     # bindings add the "-doxygen" flag that older SWIG does not understand.
-    # Strip that flag so the Python wrapper can still be generated on Python 3.6.
+    # Patch the source as a best-effort fallback, and more importantly route
+    # CMake through a tiny SWIG wrapper that strips "-doxygen" from argv.
     if swig -help 2>&1 | grep -q -- "-doxygen"; then
         echo "SWIG supports -doxygen, keeping upstream flags"
+        swig_executable="$(command -v swig)"
     else
         echo "SWIG does not support -doxygen; patching FAISS CMakeLists for SWIG 3.0"
         sed -i 's/"-doxygen"//g' faiss/python/CMakeLists.txt
+        swig_wrapper_dir="$(mktemp -d /tmp/faiss-swig.XXXXXX)"
+        cat > "$swig_wrapper_dir/swig" <<'EOF'
+#!/bin/sh
+real_swig="${REAL_SWIG:-/usr/bin/swig}"
+args=""
+for arg in "$@"; do
+    if [ "$arg" != "-doxygen" ]; then
+        args="$args \"$arg\""
+    fi
+done
+eval exec "\"$real_swig\"" $args
+EOF
+        chmod +x "$swig_wrapper_dir/swig"
+        export REAL_SWIG="$(command -v swig)"
+        export PATH="$swig_wrapper_dir:$PATH"
+        swig_executable="$swig_wrapper_dir/swig"
     fi
 
     wget -q https://github.com/Kitware/CMake/releases/download/v3.24.3/cmake-3.24.3-linux-aarch64.sh -O /tmp/cmake.sh
@@ -255,6 +275,7 @@ compile_faiss_cpu() {
         -DPython_EXECUTABLE="$(which python3)" \
         -DPython_INCLUDE_DIR="$py_inc" \
         -DPython_NumPy_INCLUDE_DIRS="$numpy_inc" \
+        -DSWIG_EXECUTABLE="$swig_executable" \
         .
 
     local faiss_make_jobs="${FAISS_MAKE_JOBS:-2}"
@@ -264,6 +285,9 @@ compile_faiss_cpu() {
     python3 setup.py install
     cd "$PROJECT_ROOT"
     rm -rf "$faiss_dir"
+    if [ -n "$swig_wrapper_dir" ]; then
+        rm -rf "$swig_wrapper_dir"
+    fi
 }
 
 
