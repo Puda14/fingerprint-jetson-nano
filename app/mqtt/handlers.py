@@ -195,10 +195,10 @@ def _handle_sync_task(mqtt_client_ref: Any, task_data: dict) -> None:
 def _handle_model_update(mqtt_client_ref: Any, payload: ModelUpdatePayload) -> None:
     """Download model from orchestrator and optionally convert to TensorRT."""
     import os
-    from app.services.model_service import get_model_service
+    from app.services.model_service import get_model_service_sync
 
     worker_id = mqtt_client_ref.worker_id
-    model_service = get_model_service()
+    model_service = get_model_service_sync()
 
     task_id = "model_{}".format(payload.model_name)
     mqtt_client_ref.current_task_id = task_id

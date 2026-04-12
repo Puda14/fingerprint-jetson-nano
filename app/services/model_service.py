@@ -388,3 +388,11 @@ async def get_model_service() -> "ModelService":
     if _instance is None:
         _instance = ModelService()
     return _instance
+
+
+def get_model_service_sync() -> "ModelService":
+    """Sync version for use in background threads (MQTT handlers etc)."""
+    global _instance
+    if _instance is None:
+        _instance = ModelService()
+    return _instance
