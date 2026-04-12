@@ -9,6 +9,7 @@ from dateutil.parser import isoparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.api.pydantic_compat import model_dump_compat
 from app.api.schemas import (
     ApiResponse,
     BackupResponse,
@@ -155,7 +156,7 @@ async def update_config(
     body: ConfigUpdateRequest,
     sys_svc: SystemService = Depends(get_system_service),
 ) -> ApiResponse:
-    cfg = sys_svc.update_config(body.model_dump(exclude_unset=True))
+    cfg = sys_svc.update_config(model_dump_compat(body, exclude_unset=True))
     return ApiResponse(success=True, data=ConfigResponse(**cfg))
 
 

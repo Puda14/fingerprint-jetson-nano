@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from dateutil.parser import isoparse
 
+from app.api.pydantic_compat import model_dump_compat
 from app.core.config import Settings, get_settings
 from app.api.schemas import (
     ApiResponse,
@@ -36,7 +37,7 @@ async def create_user(
     body: UserCreate,
     pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
-    user = await pipeline.create_user(body.model_dump())
+    user = await pipeline.create_user(model_dump_compat(body))
     return ApiResponse(
         success=True,
         data=_to_user_response(user),
@@ -97,7 +98,9 @@ async def update_user(
     body: UserUpdate,
     pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
-    updated = await pipeline.update_user(int(user_id), body.model_dump(exclude_unset=True))
+    updated = await pipeline.update_user(
+        int(user_id), model_dump_compat(body, exclude_unset=True)
+    )
     if updated is None:
         raise HTTPException(status_code=404, detail="User not found")
     return ApiResponse(success=True, data=_to_user_response(updated))

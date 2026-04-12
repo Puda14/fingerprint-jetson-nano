@@ -1,5 +1,7 @@
 """
-Pydantic v2 schemas for all API request/response models.
+API request/response schemas.
+
+The Jetson worker stays on FastAPI/Pydantic v1 for Python 3.6 compatibility.
 """
 
 
