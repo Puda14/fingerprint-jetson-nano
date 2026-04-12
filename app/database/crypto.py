@@ -128,10 +128,13 @@ class CryptoService:
         if len(raw) == expected_bytes:
             return list(struct.unpack("<{}f".format(EMBEDDING_DIM), raw))
 
-        # Backward compatibility for pre-migration records (256-d vectors).
+        # Backward compatibility across historical embedding sizes.
         if len(raw) == 256 * 4 and EMBEDDING_DIM == 512:
             legacy = list(struct.unpack("<256f", raw))
             return legacy + [0.0] * 256
+        if len(raw) == 512 * 4 and EMBEDDING_DIM == 256:
+            legacy = list(struct.unpack("<512f", raw))
+            return legacy[:256]
 
         raise ValueError(
             "Unexpected embedding bytes: expected {} bytes, got {}".format(

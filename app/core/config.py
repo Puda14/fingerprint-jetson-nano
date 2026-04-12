@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     image_width: int = 192
     image_height: int = 192
     knn_k: int = 16                # number of neighbors in graph builder
-    embedding_dim: int = 512       # embedding vector dimension
+    embedding_dim: int = 256       # embedding vector dimension
     extractor: str = "cn"          # minutiae extraction method: "cn" | "fingernet"
     fingernet_model_path: str = "" # ONNX path if using FingerNet
     clahe_clip: float = 2.5        # CLAHE clip level for preprocessing (0–8)

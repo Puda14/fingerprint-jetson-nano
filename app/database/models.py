@@ -13,12 +13,14 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
 
+from app.core.config import get_settings
+
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-EMBEDDING_DIM = 512
+EMBEDDING_DIM = int(get_settings().embedding_dim)
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@ class VerificationDecision(str, Enum):
 
 @dataclass(frozen=True)
 class Embedding:
-    """512-dimensional float32 embedding vector (immutable)."""
+    """Configured-dimensional float32 embedding vector (immutable)."""
 
     values: tuple
 
