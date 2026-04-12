@@ -32,10 +32,10 @@ router = APIRouter(prefix="/sensor", tags=["sensor"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/status", response_model=ApiResponse[SensorStatus])
+@router.get("/status", response_model=ApiResponse)
 async def sensor_status(
     sensor: Annotated[SensorService, Depends(get_sensor_service)],
-) -> ApiResponse[SensorStatus]:
+) -> ApiResponse:
     info = await sensor.get_info()
     user_count = await sensor.get_user_count()
     compare_level = await sensor.get_compare_level()
@@ -59,10 +59,10 @@ async def sensor_status(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/capture", response_model=ApiResponse[CaptureResponse])
+@router.post("/capture", response_model=ApiResponse)
 async def capture(
     sensor: Annotated[SensorService, Depends(get_sensor_service)],
-) -> ApiResponse[CaptureResponse]:
+) -> ApiResponse:
     result = await sensor.capture_image()
 
     if not result.success:
@@ -99,11 +99,11 @@ async def capture(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/led", response_model=ApiResponse[dict])
+@router.post("/led", response_model=ApiResponse)
 async def led_control(
     body: LEDRequest,
     sensor: Annotated[SensorService, Depends(get_sensor_service)],
-) -> ApiResponse[dict]:
+) -> ApiResponse:
     if body.color == "off" or body.color == "0":
         ok = await sensor.led_off()
     else:

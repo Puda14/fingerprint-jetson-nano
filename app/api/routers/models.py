@@ -31,10 +31,10 @@ router = APIRouter(prefix="/models", tags=["models"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=ApiResponse[ModelListResponse])
+@router.get("", response_model=ApiResponse)
 async def list_models(
     svc: Annotated[ModelService, Depends(get_model_service)],
-) -> ApiResponse[ModelListResponse]:
+) -> ApiResponse:
     raw = await svc.list_models()
     models = [
         ModelInfo(
@@ -57,11 +57,11 @@ async def list_models(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/upload", response_model=ApiResponse[ModelUploadResponse])
+@router.post("/upload", response_model=ApiResponse)
 async def upload_model(
     svc: Annotated[ModelService, Depends(get_model_service)],
     file: UploadFile = File(...),
-) -> ApiResponse[ModelUploadResponse]:
+) -> ApiResponse:
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required")
 
@@ -90,11 +90,11 @@ async def upload_model(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{model_id}/activate", response_model=ApiResponse[dict])
+@router.post("/{model_id}/activate", response_model=ApiResponse)
 async def activate_model(
     model_id: str,
     svc: Annotated[ModelService, Depends(get_model_service)],
-) -> ApiResponse[dict]:
+) -> ApiResponse:
     ok = await svc.activate_model(model_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -106,13 +106,13 @@ async def activate_model(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{model_id}/convert", response_model=ApiResponse[dict])
+@router.post("/{model_id}/convert", response_model=ApiResponse)
 async def convert_model(
     model_id: str,
     body: ConvertRequest,
     svc: Annotated[ModelService, Depends(get_model_service)],
     bg: BackgroundTasks,
-) -> ApiResponse[dict]:
+) -> ApiResponse:
     model = await svc.get_model(model_id)
     if model is None:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -143,11 +143,11 @@ async def convert_model(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{model_id}/profile", response_model=ApiResponse[ProfileResponse])
+@router.get("/{model_id}/profile", response_model=ApiResponse)
 async def profile_model(
     model_id: str,
     svc: Annotated[ModelService, Depends(get_model_service)],
-) -> ApiResponse[ProfileResponse]:
+) -> ApiResponse:
     try:
         data = await svc.profile_model(model_id)
     except ValueError as exc:
@@ -160,11 +160,11 @@ async def profile_model(
 # ---------------------------------------------------------------------------
 
 
-@router.delete("/{model_id}", response_model=ApiResponse[dict])
+@router.delete("/{model_id}", response_model=ApiResponse)
 async def delete_model(
     model_id: str,
     svc: Annotated[ModelService, Depends(get_model_service)],
-) -> ApiResponse[dict]:
+) -> ApiResponse:
     ok = await svc.delete_model(model_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Model not found")

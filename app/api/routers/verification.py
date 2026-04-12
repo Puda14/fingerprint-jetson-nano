@@ -35,11 +35,11 @@ router = APIRouter(tags=["verification"])
 # ---------------------------------------------------------------------------
 
 
-@router.post("/verify", response_model=ApiResponse[VerifyResponse])
+@router.post("/verify", response_model=ApiResponse)
 async def verify(
     body: VerifyRequest,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[VerifyResponse]:
+) -> ApiResponse:
     image_bytes = None
     if body.image_base64:
         try:
@@ -65,12 +65,12 @@ async def verify(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/identify", response_model=ApiResponse[IdentifyResponse])
+@router.post("/identify", response_model=ApiResponse)
 async def identify(
     body: IdentifyRequest,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> ApiResponse[IdentifyResponse]:
+) -> ApiResponse:
     start = time.perf_counter()
     image_bytes = None
     if body.image_base64:

@@ -36,11 +36,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=ApiResponse[UserResponse], status_code=201)
+@router.post("", response_model=ApiResponse, status_code=201)
 async def create_user(
     body: UserCreate,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[UserResponse]:
+) -> ApiResponse:
     user = await pipeline.create_user(body.model_dump())
     return ApiResponse(
         success=True,
@@ -53,7 +53,7 @@ async def create_user(
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=ApiResponse[UserListResponse])
+@router.get("", response_model=ApiResponse)
 async def list_users(
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
     page: int = Query(default=1, ge=1),
@@ -61,7 +61,7 @@ async def list_users(
     search: Optional[str] = Query(default=None, description="Search by name or employee_id"),
     department: Optional[str] = Query(default=None),
     role: Optional[str] = Query(default=None),
-) -> ApiResponse[UserListResponse]:
+) -> ApiResponse:
     users, total = await pipeline.list_users(
         page=page, limit=limit, search=search, department=department, role=role
     )
@@ -80,11 +80,11 @@ async def list_users(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{user_id}", response_model=ApiResponse[UserResponse])
+@router.get("/{user_id}", response_model=ApiResponse)
 async def get_user(
     user_id: str,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[UserResponse]:
+) -> ApiResponse:
     user = await pipeline.get_user(int(user_id))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -96,12 +96,12 @@ async def get_user(
 # ---------------------------------------------------------------------------
 
 
-@router.put("/{user_id}", response_model=ApiResponse[UserResponse])
+@router.put("/{user_id}", response_model=ApiResponse)
 async def update_user(
     user_id: str,
     body: UserUpdate,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[UserResponse]:
+) -> ApiResponse:
     updated = await pipeline.update_user(int(user_id), body.model_dump(exclude_unset=True))
     if updated is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -113,11 +113,11 @@ async def update_user(
 # ---------------------------------------------------------------------------
 
 
-@router.delete("/{user_id}", response_model=ApiResponse[dict])
+@router.delete("/{user_id}", response_model=ApiResponse)
 async def delete_user(
     user_id: str,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[dict]:
+) -> ApiResponse:
     ok = await pipeline.deactivate_user(int(user_id))
     if not ok:
         raise HTTPException(status_code=404, detail="User not found")
@@ -144,12 +144,12 @@ _FINGER_INDEX_MAP = {
 }
 
 
-@router.post("/{user_id}/enroll-finger", response_model=ApiResponse[EnrollResponse])
+@router.post("/{user_id}/enroll-finger", response_model=ApiResponse)
 async def enroll_finger(
     user_id: str,
     body: EnrollRequest,
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[EnrollResponse]:
+) -> ApiResponse:
     finger_idx = _FINGER_INDEX_MAP.get(body.finger, 1)
     result = await pipeline.enroll_user(
         user_id=int(user_id),

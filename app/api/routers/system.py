@@ -38,12 +38,12 @@ router = APIRouter(prefix="/system", tags=["system"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/health", response_model=ApiResponse[SystemHealth])
+@router.get("/health", response_model=ApiResponse)
 async def health(
     sys_svc: Annotated[SystemService, Depends(get_system_service)],
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
     sensor: Annotated[SensorService, Depends(get_sensor_service)],
-) -> ApiResponse[SystemHealth]:
+) -> ApiResponse:
     data = await sys_svc.get_health(
         sensor_connected=sensor.is_connected,
         active_model=pipeline.active_model,
@@ -56,7 +56,7 @@ async def health(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/logs", response_model=ApiResponse[LogListResponse])
+@router.get("/logs", response_model=ApiResponse)
 async def logs(
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
     page: int = Query(default=1, ge=1),
@@ -66,7 +66,7 @@ async def logs(
     decision: Optional[str] = Query(default=None),
     date_from: Optional[str] = Query(default=None, description="ISO date string"),
     date_to: Optional[str] = Query(default=None, description="ISO date string"),
-) -> ApiResponse[LogListResponse]:
+) -> ApiResponse:
     uid = int(user_id) if user_id else None
     raw_logs, total = await pipeline.get_logs(
         page=page,
@@ -117,10 +117,10 @@ async def logs(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/stats", response_model=ApiResponse[StatsResponse])
+@router.get("/stats", response_model=ApiResponse)
 async def stats(
     pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-) -> ApiResponse[StatsResponse]:
+) -> ApiResponse:
     data = await pipeline.get_stats()
     return ApiResponse(
         success=True,
@@ -142,10 +142,10 @@ async def stats(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/config", response_model=ApiResponse[ConfigResponse])
+@router.get("/config", response_model=ApiResponse)
 async def get_config(
     sys_svc: Annotated[SystemService, Depends(get_system_service)],
-) -> ApiResponse[ConfigResponse]:
+) -> ApiResponse:
     cfg = sys_svc.get_config()
     return ApiResponse(success=True, data=ConfigResponse(**cfg))
 
@@ -155,11 +155,11 @@ async def get_config(
 # ---------------------------------------------------------------------------
 
 
-@router.put("/config", response_model=ApiResponse[ConfigResponse])
+@router.put("/config", response_model=ApiResponse)
 async def update_config(
     body: ConfigUpdateRequest,
     sys_svc: Annotated[SystemService, Depends(get_system_service)],
-) -> ApiResponse[ConfigResponse]:
+) -> ApiResponse:
     cfg = sys_svc.update_config(body.model_dump(exclude_unset=True))
     return ApiResponse(success=True, data=ConfigResponse(**cfg))
 
@@ -169,10 +169,10 @@ async def update_config(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/backup", response_model=ApiResponse[BackupResponse])
+@router.post("/backup", response_model=ApiResponse)
 async def backup(
     sys_svc: Annotated[SystemService, Depends(get_system_service)],
-) -> ApiResponse[BackupResponse]:
+) -> ApiResponse:
     result = await sys_svc.create_backup()
     return ApiResponse(success=True, data=BackupResponse(**result))
 
@@ -182,10 +182,10 @@ async def backup(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/devices", response_model=ApiResponse[List[DeviceInfo]])
+@router.get("/devices", response_model=ApiResponse])
 async def devices(
     sys_svc: Annotated[SystemService, Depends(get_system_service)],
-) -> ApiResponse[List[DeviceInfo]]:
+) -> ApiResponse]:
     devs = await sys_svc.list_devices()
     return ApiResponse(
         success=True,
