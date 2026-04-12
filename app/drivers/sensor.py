@@ -110,7 +110,7 @@ class USBSensorDriver(SensorDriver):
     ):
         self._vid = vid
         self._pid = pid
-        self._sdk_path = sdk_path or "/home/yen/SDK-Fingerprint-sensor"
+        self._sdk_path = sdk_path or "/home/binhan1/SDK-Fingerprint-sensor"
         self._reader = None
         self._connected = False
         self._lock = threading.Lock()
