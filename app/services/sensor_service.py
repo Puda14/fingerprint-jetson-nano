@@ -173,5 +173,5 @@ class SensorService:
         return await loop.run_in_executor(None, self._driver.get_compare_level)
 
 
-async def SensorService.get_instance() -> "SensorService":
+async def get_sensor_service() -> "SensorService":
     return SensorService.get_instance()

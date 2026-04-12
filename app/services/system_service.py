@@ -172,7 +172,7 @@ class SystemService:
 _instance: Optional["SystemService"] = None
 
 
-async def SystemService.get_instance() -> "SystemService":
+async def get_system_service() -> "SystemService":
     global _instance
     if _instance is None:
         _instance = SystemService()
