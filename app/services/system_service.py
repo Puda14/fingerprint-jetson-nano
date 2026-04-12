@@ -169,10 +169,10 @@ class SystemService:
 # Dependency injection
 # ---------------------------------------------------------------------------
 
-_instance: Optional[SystemService] = None
+_instance: Optional["SystemService"] = None
 
 
-def get_system_service() -> SystemService:
+def get_system_service() -> "SystemService":
     global _instance
     if _instance is None:
         _instance = SystemService()

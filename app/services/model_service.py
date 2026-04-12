@@ -340,10 +340,10 @@ def _path_to_id(path: Path) -> str:
 # Dependency injection
 # ---------------------------------------------------------------------------
 
-_instance: Optional[ModelService] = None
+_instance: Optional["ModelService"] = None
 
 
-def get_model_service() -> ModelService:
+def get_model_service() -> "ModelService":
     global _instance
     if _instance is None:
         _instance = ModelService()

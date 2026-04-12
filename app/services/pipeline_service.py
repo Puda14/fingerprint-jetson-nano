@@ -101,7 +101,7 @@ class PipelineService:
     Uses singleton pattern to ensure resources are initialized only once.
     """
 
-    _instance: Optional[PipelineService] = None
+    _instance: Optional["PipelineService"] = None
 
     def __init__(self) -> None:
         self._settings = get_settings()
@@ -123,7 +123,7 @@ class PipelineService:
     # -- singleton access ----------------------------------------------------
 
     @classmethod
-    def get_instance(cls) -> PipelineService:
+    def get_instance(cls) -> "PipelineService":
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -1136,5 +1136,5 @@ class PipelineService:
 # ---------------------------------------------------------------------------
 
 
-def get_pipeline_service() -> PipelineService:
+def get_pipeline_service() -> "PipelineService":
     return PipelineService.get_instance()

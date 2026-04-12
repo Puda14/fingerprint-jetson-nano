@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 class SensorService:
     """Async-friendly singleton wrapping the fingerprint sensor."""
 
-    _instance: Optional[SensorService] = None
+    _instance: Optional["SensorService"] = None
 
     def __init__(self) -> None:
         self._driver: Optional[SensorDriver] = None
 
     @classmethod
-    def get_instance(cls) -> SensorService:
+    def get_instance(cls) -> "SensorService":
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -173,5 +173,5 @@ class SensorService:
         return await loop.run_in_executor(None, self._driver.get_compare_level)
 
 
-def get_sensor_service() -> SensorService:
+def get_sensor_service() -> "SensorService":
     return SensorService.get_instance()
