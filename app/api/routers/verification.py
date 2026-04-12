@@ -10,8 +10,7 @@ import time
 try:
     from typing import List, Optional, Annotated
 except ImportError:
-    from typing_extensions import Annotated
-
+    
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.core.config import Settings, get_settings
@@ -38,7 +37,7 @@ router = APIRouter(tags=["verification"])
 @router.post("/verify", response_model=ApiResponse)
 async def verify(
     body: VerifyRequest,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     image_bytes = None
     if body.image_base64:
@@ -68,8 +67,8 @@ async def verify(
 @router.post("/identify", response_model=ApiResponse)
 async def identify(
     body: IdentifyRequest,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
+    settings: Settings = Depends(get_settings),
 ) -> ApiResponse:
     start = time.perf_counter()
     image_bytes = None

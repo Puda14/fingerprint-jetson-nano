@@ -10,8 +10,7 @@ import time
 try:
     from typing import List, Optional, Annotated
 except ImportError:
-    from typing_extensions import Annotated
-
+    
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from app.api.schemas import (
@@ -34,7 +33,7 @@ router = APIRouter(prefix="/sensor", tags=["sensor"])
 
 @router.get("/status", response_model=ApiResponse)
 async def sensor_status(
-    sensor: Annotated[SensorService, Depends(get_sensor_service)],
+    sensor: SensorService = Depends(get_sensor_service),
 ) -> ApiResponse:
     info = await sensor.get_info()
     user_count = await sensor.get_user_count()
@@ -61,7 +60,7 @@ async def sensor_status(
 
 @router.post("/capture", response_model=ApiResponse)
 async def capture(
-    sensor: Annotated[SensorService, Depends(get_sensor_service)],
+    sensor: SensorService = Depends(get_sensor_service),
 ) -> ApiResponse:
     result = await sensor.capture_image()
 
@@ -102,7 +101,7 @@ async def capture(
 @router.post("/led", response_model=ApiResponse)
 async def led_control(
     body: LEDRequest,
-    sensor: Annotated[SensorService, Depends(get_sensor_service)],
+    sensor: SensorService = Depends(get_sensor_service),
 ) -> ApiResponse:
     if body.color == "off" or body.color == "0":
         ok = await sensor.led_off()

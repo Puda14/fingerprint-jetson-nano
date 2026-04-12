@@ -7,8 +7,7 @@ from datetime import datetime, timezone
 try:
     from typing import Annotated
 except ImportError:
-    from typing_extensions import Annotated
-
+    
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 
 from app.api.schemas import (
@@ -33,7 +32,7 @@ router = APIRouter(prefix="/models", tags=["models"])
 
 @router.get("", response_model=ApiResponse)
 async def list_models(
-    svc: Annotated[ModelService, Depends(get_model_service)],
+    svc: ModelService = Depends(get_model_service),
 ) -> ApiResponse:
     raw = await svc.list_models()
     models = [
@@ -59,7 +58,7 @@ async def list_models(
 
 @router.post("/upload", response_model=ApiResponse)
 async def upload_model(
-    svc: Annotated[ModelService, Depends(get_model_service)],
+    svc: ModelService = Depends(get_model_service),
     file: UploadFile = File(...),
 ) -> ApiResponse:
     if not file.filename:
@@ -93,7 +92,7 @@ async def upload_model(
 @router.post("/{model_id}/activate", response_model=ApiResponse)
 async def activate_model(
     model_id: str,
-    svc: Annotated[ModelService, Depends(get_model_service)],
+    svc: ModelService = Depends(get_model_service),
 ) -> ApiResponse:
     ok = await svc.activate_model(model_id)
     if not ok:
@@ -110,7 +109,7 @@ async def activate_model(
 async def convert_model(
     model_id: str,
     body: ConvertRequest,
-    svc: Annotated[ModelService, Depends(get_model_service)],
+    svc: ModelService = Depends(get_model_service),
     bg: BackgroundTasks,
 ) -> ApiResponse:
     model = await svc.get_model(model_id)
@@ -146,7 +145,7 @@ async def convert_model(
 @router.get("/{model_id}/profile", response_model=ApiResponse)
 async def profile_model(
     model_id: str,
-    svc: Annotated[ModelService, Depends(get_model_service)],
+    svc: ModelService = Depends(get_model_service),
 ) -> ApiResponse:
     try:
         data = await svc.profile_model(model_id)
@@ -163,7 +162,7 @@ async def profile_model(
 @router.delete("/{model_id}", response_model=ApiResponse)
 async def delete_model(
     model_id: str,
-    svc: Annotated[ModelService, Depends(get_model_service)],
+    svc: ModelService = Depends(get_model_service),
 ) -> ApiResponse:
     ok = await svc.delete_model(model_id)
     if not ok:

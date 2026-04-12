@@ -10,8 +10,7 @@ from dateutil.parser import isoparse
 try:
     from typing import Annotated
 except ImportError:
-    from typing_extensions import Annotated
-
+    
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.schemas import (
@@ -40,9 +39,9 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 @router.get("/health", response_model=ApiResponse)
 async def health(
-    sys_svc: Annotated[SystemService, Depends(get_system_service)],
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
-    sensor: Annotated[SensorService, Depends(get_sensor_service)],
+    sys_svc: SystemService = Depends(get_system_service),
+    pipeline: PipelineService = Depends(get_pipeline_service),
+    sensor: SensorService = Depends(get_sensor_service),
 ) -> ApiResponse:
     data = await sys_svc.get_health(
         sensor_connected=sensor.is_connected,
@@ -58,7 +57,7 @@ async def health(
 
 @router.get("/logs", response_model=ApiResponse)
 async def logs(
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     user_id: Optional[str] = Query(default=None),
@@ -119,7 +118,7 @@ async def logs(
 
 @router.get("/stats", response_model=ApiResponse)
 async def stats(
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     data = await pipeline.get_stats()
     return ApiResponse(
@@ -144,7 +143,7 @@ async def stats(
 
 @router.get("/config", response_model=ApiResponse)
 async def get_config(
-    sys_svc: Annotated[SystemService, Depends(get_system_service)],
+    sys_svc: SystemService = Depends(get_system_service),
 ) -> ApiResponse:
     cfg = sys_svc.get_config()
     return ApiResponse(success=True, data=ConfigResponse(**cfg))
@@ -158,7 +157,7 @@ async def get_config(
 @router.put("/config", response_model=ApiResponse)
 async def update_config(
     body: ConfigUpdateRequest,
-    sys_svc: Annotated[SystemService, Depends(get_system_service)],
+    sys_svc: SystemService = Depends(get_system_service),
 ) -> ApiResponse:
     cfg = sys_svc.update_config(body.model_dump(exclude_unset=True))
     return ApiResponse(success=True, data=ConfigResponse(**cfg))
@@ -171,7 +170,7 @@ async def update_config(
 
 @router.post("/backup", response_model=ApiResponse)
 async def backup(
-    sys_svc: Annotated[SystemService, Depends(get_system_service)],
+    sys_svc: SystemService = Depends(get_system_service),
 ) -> ApiResponse:
     result = await sys_svc.create_backup()
     return ApiResponse(success=True, data=BackupResponse(**result))
@@ -184,7 +183,7 @@ async def backup(
 
 @router.get("/devices", response_model=ApiResponse])
 async def devices(
-    sys_svc: Annotated[SystemService, Depends(get_system_service)],
+    sys_svc: SystemService = Depends(get_system_service),
 ) -> ApiResponse]:
     devs = await sys_svc.list_devices()
     return ApiResponse(

@@ -8,8 +8,7 @@ from datetime import datetime, timezone
 try:
     from typing import Annotated
 except ImportError:
-    from typing_extensions import Annotated
-
+    
 from fastapi import APIRouter, Depends, HTTPException, Query
 from dateutil.parser import isoparse
 
@@ -39,7 +38,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("", response_model=ApiResponse, status_code=201)
 async def create_user(
     body: UserCreate,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     user = await pipeline.create_user(body.model_dump())
     return ApiResponse(
@@ -55,7 +54,7 @@ async def create_user(
 
 @router.get("", response_model=ApiResponse)
 async def list_users(
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     search: Optional[str] = Query(default=None, description="Search by name or employee_id"),
@@ -83,7 +82,7 @@ async def list_users(
 @router.get("/{user_id}", response_model=ApiResponse)
 async def get_user(
     user_id: str,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     user = await pipeline.get_user(int(user_id))
     if user is None:
@@ -100,7 +99,7 @@ async def get_user(
 async def update_user(
     user_id: str,
     body: UserUpdate,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     updated = await pipeline.update_user(int(user_id), body.model_dump(exclude_unset=True))
     if updated is None:
@@ -116,7 +115,7 @@ async def update_user(
 @router.delete("/{user_id}", response_model=ApiResponse)
 async def delete_user(
     user_id: str,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     ok = await pipeline.deactivate_user(int(user_id))
     if not ok:
@@ -148,7 +147,7 @@ _FINGER_INDEX_MAP = {
 async def enroll_finger(
     user_id: str,
     body: EnrollRequest,
-    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+    pipeline: PipelineService = Depends(get_pipeline_service),
 ) -> ApiResponse:
     finger_idx = _FINGER_INDEX_MAP.get(body.finger, 1)
     result = await pipeline.enroll_user(
