@@ -343,7 +343,7 @@ def _path_to_id(path: Path) -> str:
 _instance: Optional["ModelService"] = None
 
 
-async def get_model_service() -> "ModelService":
+async def ModelService.get_instance() -> "ModelService":
     global _instance
     if _instance is None:
         _instance = ModelService()

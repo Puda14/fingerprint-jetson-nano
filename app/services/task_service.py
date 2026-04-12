@@ -360,7 +360,7 @@ class TaskService:
         """Find the ONNX model file on disk."""
         from app.services.model_service import get_model_service
 
-        model_svc = get_model_service()
+        model_svc = ModelService.get_instance()
 
         # Try to get embedding model path by type
         path = model_svc.get_model_path_by_type("embedding")

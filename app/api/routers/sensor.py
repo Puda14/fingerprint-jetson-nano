@@ -137,7 +137,7 @@ async def ws_sensor_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     logger.info("WebSocket /sensor/stream connected")
 
-    sensor = get_sensor_service()
+    sensor = SensorService.get_instance()
     streaming = False
     target_fps = 10
 
@@ -181,7 +181,7 @@ async def ws_sensor_stream(websocket: WebSocket) -> None:
                 target_fps = min(max(msg.get("fps", 10), 1), 30)
                 streaming = True
                 if stream_task is None or stream_task.done():
-                    stream_task = asyncio.create_task(_stream_loop())
+                    stream_task = asyncio.ensure_future(_stream_loop())
                 await websocket.send_json({"status": "streaming", "fps": target_fps})
 
             elif action == "stop":

@@ -218,7 +218,7 @@ class MQTTWorkerClient:
         # Gather loaded models info
         try:
             from app.services.model_service import get_model_service
-            loaded_models = get_model_service().loaded_models
+            loaded_models = ModelService.get_instance().loaded_models
         except Exception:
             loaded_models = {}
 
@@ -256,7 +256,7 @@ class MQTTWorkerClient:
             try:
                 from app.services.pipeline_service import get_pipeline_service
 
-                svc = get_pipeline_service()
+                svc = PipelineService.get_instance()
                 sent = svc.sync_offline_enrollments()
                 if sent:
                     logger.info("Offline sync on reconnect sent %d event(s).", sent)
