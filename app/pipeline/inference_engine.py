@@ -121,7 +121,7 @@ class ONNXBackend(InferenceBackend):
         self._ort = None
         self._input_mode: str = "graph"
         self._image_input_name: Optional[str] = None
-        self._image_input_shape: List[Any] | None = None
+        self._image_input_shape: Optional[List[Any]] = None
         self._image_layout: str = "nchw"
 
     def load(self, model_path: str) -> bool:

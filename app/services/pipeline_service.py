@@ -257,7 +257,7 @@ class PipelineService:
         created = await loop.run_in_executor(None, self._user_repo.create, user)
         return created.to_dict()
 
-    async def get_user(self, user_id: int) -> Dict[str, Any] | None:
+    async def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         if self._user_repo is None:
             return None
         loop = asyncio.get_running_loop()
@@ -311,7 +311,7 @@ class PipelineService:
 
     async def update_user(
         self, user_id: int, updates: Dict[str, Any]
-    ) -> Dict[str, Any] | None:
+    ) -> Optional[Dict[str, Any]]:
         if self._user_repo is None:
             return None
         loop = asyncio.get_running_loop()

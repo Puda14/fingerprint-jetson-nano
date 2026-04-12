@@ -230,7 +230,7 @@ class ModelService:
 
     # -- get model by id -----------------------------------------------------
 
-    async def get_model(self, model_id: str) -> Dict[str, Any] | None:
+    async def get_model(self, model_id: str) -> Optional[Dict[str, Any]]:
         if model_id not in _model_registry:
             await self.list_models()
         return _model_registry.get(model_id)

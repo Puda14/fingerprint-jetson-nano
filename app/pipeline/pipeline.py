@@ -95,7 +95,7 @@ class VerificationPipeline:
         ``clahe_grid``           int   (8)
     """
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         cfg = config or {}
 
         self._image_width: int = cfg.get("image_width", 192)
