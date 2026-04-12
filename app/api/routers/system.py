@@ -177,10 +177,10 @@ async def backup(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/devices", response_model=ApiResponse])
+@router.get("/devices", response_model=ApiResponse)
 async def devices(
     sys_svc: SystemService = Depends(get_system_service),
-) -> ApiResponse]:
+) -> ApiResponse:
     devs = await sys_svc.list_devices()
     return ApiResponse(
         success=True,
