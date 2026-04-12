@@ -450,9 +450,11 @@ def convert_onnx_to_trt(
         inp = network.get_input(i)
         shape = inp.shape
         if any(d == -1 for d in shape):
-            min_shape = tuple(max(1, d) if d != -1 else 8 for d in shape)
-            opt_shape = tuple(max(1, d) if d != -1 else 64 for d in shape)
-            max_shape = tuple(max(1, d) if d != -1 else 256 for d in shape)
+            # For fingerprint models: always batch=1, fixed spatial dims
+            # Using small/safe shapes to avoid GPU OOM on Jetson Nano (2GB shared RAM)
+            min_shape = tuple(1 if d == -1 else max(1, d) for d in shape)
+            opt_shape = tuple(1 if d == -1 else max(1, d) for d in shape)
+            max_shape = tuple(1 if d == -1 else max(1, d) for d in shape)
             logger.info(
                 "  Dynamic input %s: min=%s opt=%s max=%s",
                 inp.name, min_shape, opt_shape, max_shape,
