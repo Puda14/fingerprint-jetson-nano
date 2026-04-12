@@ -13,8 +13,7 @@ aiofiles>=0.8.0,<1.0.0
 
 # --- Data validation -------------------------------------------------------
 pydantic<2.0.0
-# pydantic-settings>=2.1.0,<3.0.0
-eval_type_backport>=0.2.0,<1.0.0  # Supports modern type hints (list[str], |) on Python 3.8
+# pydantic-settings: not needed for pydantic v1
 python-dateutil>=2.8.2,<3.0.0
 
 # --- Cryptography ----------------------------------------------------------
