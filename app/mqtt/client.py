@@ -254,8 +254,8 @@ class MQTTWorkerClient:
 
         def _worker() -> None:
             try:
-                from app.services.pipeline_service import get_pipeline_service
-                svc = get_pipeline_service()
+                from app.services.pipeline_service import get_pipeline_service_sync
+                svc = get_pipeline_service_sync()
                 sent = svc.sync_offline_enrollments()
                 if sent:
                     logger.info("Offline sync on reconnect sent %d event(s).", sent)

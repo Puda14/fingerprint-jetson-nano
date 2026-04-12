@@ -1138,3 +1138,8 @@ class PipelineService:
 
 async def get_pipeline_service() -> "PipelineService":
     return PipelineService.get_instance()
+
+
+def get_pipeline_service_sync() -> "PipelineService":
+    """Sync version for use in background threads."""
+    return PipelineService.get_instance()
