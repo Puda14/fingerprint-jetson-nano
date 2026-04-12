@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.lifespan import lifespan
+from app.core.lifespan import startup, shutdown
 from app.api.routers import (
     users_router,
     verification_router,
@@ -58,8 +58,17 @@ def create_app() -> FastAPI:
         docs_url=f"{settings.api_prefix}/docs",
         redoc_url=f"{settings.api_prefix}/redoc",
         openapi_url=f"{settings.api_prefix}/openapi.json",
-        lifespan=lifespan,
     )
+
+    # -- Lifecycle events (Python 3.6 compatible) ---------------------------
+    @app.on_event("startup")
+    async def _startup():
+        await startup(app)
+
+    @app.on_event("shutdown")
+    async def _shutdown():
+        await shutdown(app)
+
 
     # -- CORS ---------------------------------------------------------------
     app.add_middleware(
