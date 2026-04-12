@@ -376,6 +376,108 @@ def _path_to_id(path: Path) -> str:
     return hashlib.md5(path.name.encode()).hexdigest()[:12]
 
 
+def convert_onnx_to_trt(
+    input_path: str,
+    output_path: str,
+    fp16: bool = True,
+    max_workspace_mb: int = 1024,
+    max_batch_size: int = 1,
+) -> bool:
+    """Convert ONNX model to TensorRT engine using Python TensorRT API.
+
+    Handles dynamic shapes automatically.
+    Falls back gracefully when TensorRT is not available.
+
+    Args:
+        input_path: Path to input ONNX model.
+        output_path: Path to save TensorRT engine.
+        fp16: Enable FP16 precision (default True).
+        max_workspace_mb: Max GPU workspace in MB.
+        max_batch_size: Maximum batch size.
+
+    Returns:
+        True if conversion was successful.
+    """
+    try:
+        import tensorrt as trt  # type: ignore
+    except ImportError:
+        logger.warning(
+            "TensorRT not available — skipping conversion, will use ONNX Runtime."
+        )
+        return False
+
+    logger.info("TensorRT version: %s", trt.__version__)
+    logger.info("Converting: %s → %s (fp16=%s)", input_path, output_path, fp16)
+
+    trt_logger = trt.Logger(trt.Logger.WARNING)
+    builder = trt.Builder(trt_logger)
+    network = builder.create_network(
+        1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    )
+    parser = trt.OnnxParser(network, trt_logger)
+
+    # Parse ONNX model
+    logger.info("Parsing ONNX model...")
+    with open(input_path, "rb") as f:
+        if not parser.parse(f.read()):
+            for i in range(parser.num_errors):
+                logger.error("  Parse error: %s", parser.get_error(i))
+            return False
+
+    logger.info(
+        "  Inputs: %d  Outputs: %d",
+        network.num_inputs, network.num_outputs,
+    )
+
+    # Build config
+    config = builder.create_builder_config()
+    config.set_memory_pool_limit(
+        trt.MemoryPoolType.WORKSPACE, max_workspace_mb * (1 << 20)
+    )
+
+    if fp16 and builder.platform_has_fast_fp16:
+        logger.info("Enabling FP16 precision")
+        config.set_flag(trt.BuilderFlag.FP16)
+    elif fp16:
+        logger.warning("FP16 not supported on this platform, using FP32")
+
+    # Handle dynamic shapes
+    profile = builder.create_optimization_profile()
+    for i in range(network.num_inputs):
+        inp = network.get_input(i)
+        shape = inp.shape
+        if any(d == -1 for d in shape):
+            min_shape = tuple(max(1, d) if d != -1 else 8 for d in shape)
+            opt_shape = tuple(max(1, d) if d != -1 else 64 for d in shape)
+            max_shape = tuple(max(1, d) if d != -1 else 256 for d in shape)
+            logger.info(
+                "  Dynamic input %s: min=%s opt=%s max=%s",
+                inp.name, min_shape, opt_shape, max_shape,
+            )
+            profile.set_shape(inp.name, min_shape, opt_shape, max_shape)
+    config.add_optimization_profile(profile)
+
+    # Build engine
+    logger.info("Building TensorRT engine (may take several minutes)...")
+    start_time = time.time()
+    serialized_engine = builder.build_serialized_network(network, config)
+    if serialized_engine is None:
+        logger.error("Failed to build TensorRT engine")
+        return False
+
+    build_time = time.time() - start_time
+    logger.info("Engine built in %.1f seconds", build_time)
+
+    # Save to disk
+    with open(output_path, "wb") as f:
+        f.write(serialized_engine)
+
+    engine_size_mb = Path(output_path).stat().st_size / (1024 * 1024)
+    logger.info("Engine saved: %s (%.1f MB)", output_path, engine_size_mb)
+    return True
+
+
+
 # ---------------------------------------------------------------------------
 # Dependency injection
 # ---------------------------------------------------------------------------
