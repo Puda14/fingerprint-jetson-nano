@@ -51,11 +51,11 @@ setup(
             "onnxruntime>=1.8.0,<2.0",
         ],
         "dev": [
-            "pytest>=6.2,<8.0",
-            "pytest-asyncio>=0.17,<0.21",
+            "pytest>=6.2,<7.0",
+            "pytest-asyncio>=0.14,<0.17",
         ],
         "ssh": [
-            "asyncssh>=2.5.0,<3.0.0",
+            "asyncssh>=2.5.0,<2.13.0",
         ],
     },
     entry_points={
