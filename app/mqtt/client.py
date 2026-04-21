@@ -148,7 +148,9 @@ class MQTTWorkerClient:
                 ("task/{}/register".format(self._worker_id), 1),
                 ("task/{}/verify".format(self._worker_id), 1),
                 ("task/{}/sync".format(self._worker_id), 1),
+                ("task/{}/sync/check".format(self._worker_id), 1),
                 ("task/{}/message".format(self._worker_id), 1),
+                ("task/{}/enrollment/upload".format(self._worker_id), 1),
                 ("task/{}/model/update".format(self._worker_id), 1),
             ]
             for topic, qos in topics:
@@ -156,7 +158,6 @@ class MQTTWorkerClient:
                 logger.debug("Subscribed: %s", topic)
 
             self._send_heartbeat(status=WorkerStatus.ONLINE)
-            self._sync_offline_data_on_connect()
             self._start_heartbeat()
         else:
             logger.error("MQTT connection failed, rc=%s", rc)

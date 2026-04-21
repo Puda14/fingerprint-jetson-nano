@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import requests
 
 from app.core.config import get_settings
 from app.database.crypto import CryptoService
@@ -134,6 +135,7 @@ class PipelineService:
         self._crypto: Optional[CryptoService] = None
         self._sync_lock = threading.Lock()
         self._sync_state_file = Path(self._settings.data_dir) / ".enrollment_sync_state.json"
+        self._pending_image_dir = Path(self._settings.data_dir) / "pending_enrollment_images"
 
     # -- singleton access ----------------------------------------------------
 
@@ -532,6 +534,27 @@ class PipelineService:
                     success=False, message="No minutiae detected in image",
                 )
 
+            duplicate_candidates = await self.identify_1toN(
+                top_k=1,
+                image_bytes=image_bytes,
+                log_attempt=False,
+            )
+            if duplicate_candidates:
+                duplicate = duplicate_candidates[0]
+                return EnrollResult(
+                    user_id=user_id,
+                    finger=finger,
+                    quality_score=quality,
+                    template_count=0,
+                    success=False,
+                    message=(
+                        "Fingerprint already enrolled: {} ({})".format(
+                            duplicate.full_name,
+                            duplicate.employee_id,
+                        )
+                    ),
+                )
+
             # Encrypt and save to DB
             embedding_list = embedding.tolist()
             image_hash = Fingerprint.compute_image_hash(image_bytes)
@@ -559,6 +582,10 @@ class PipelineService:
                 # Add to FAISS index
                 self._pipeline.enroll(embedding, fp_id)
 
+                # Keep the original fingerprint image locally until the
+                # orchestrator sends a presigned upload URL for MinIO.
+                self._store_pending_image(fp_id, image_bytes)
+
                 # Get total fingerprint count for this user
                 count = await loop.run_in_executor(
                     None, self._fp_repo.count_by_user, user_id, True
@@ -579,7 +606,6 @@ class PipelineService:
                     finger_index=finger,
                     embedding_list=embedding_list,
                     quality_score=quality,
-                    image_bytes=image_bytes,
                 )
             except Exception as exc:
                 logger.warning("Failed to publish enrollment event: %s", exc)
@@ -749,6 +775,7 @@ class PipelineService:
         self,
         top_k: Optional[int] = None,
         image_bytes: Optional[bytes] = None,
+        log_attempt: bool = True,
     ) -> List[IdentifyResult]:
         """1:N identification — search FAISS gallery for the best match."""
         top_k = top_k or self._settings.identify_top_k
@@ -802,7 +829,7 @@ class PipelineService:
                 ))
 
         # Log best match
-        if self._log_repo is not None:
+        if self._log_repo is not None and log_attempt:
             best = results[0] if results else None
             decision = VerificationDecision.ACCEPT if best else VerificationDecision.REJECT
             loop = asyncio.get_event_loop()
@@ -817,10 +844,11 @@ class PipelineService:
             )
             await loop.run_in_executor(None, self._log_repo.create, log)
 
-        logger.info(
-            "Identify 1:N: %d matches above %.2f (%.1fms)",
-            len(results), threshold, elapsed,
-        )
+        if log_attempt:
+            logger.info(
+                "Identify 1:N: %d matches above %.2f (%.1fms)",
+                len(results), threshold, elapsed,
+            )
         return results
 
     # -- profiling -----------------------------------------------------------
@@ -905,17 +933,30 @@ class PipelineService:
 
     def _load_sync_state(self) -> Dict[str, Any]:
         if not self._sync_state_file.exists():
-            return {"synced_fp_ids": [], "pending_events": []}
+            return {
+                "synced_fp_ids": [],
+                "uploaded_fp_ids": [],
+                "pending_events": [],
+            }
         try:
             data = json.loads(self._sync_state_file.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
-                return {"synced_fp_ids": [], "pending_events": []}
+                return {
+                    "synced_fp_ids": [],
+                    "uploaded_fp_ids": [],
+                    "pending_events": [],
+                }
             data.setdefault("synced_fp_ids", [])
+            data.setdefault("uploaded_fp_ids", [])
             data.setdefault("pending_events", [])
             return data
         except Exception as exc:
             logger.warning("Failed to read enrollment sync state: %s", exc)
-            return {"synced_fp_ids": [], "pending_events": []}
+            return {
+                "synced_fp_ids": [],
+                "uploaded_fp_ids": [],
+                "pending_events": [],
+            }
 
     def _save_sync_state(self, state: Dict[str, Any]) -> None:
         try:
@@ -949,6 +990,99 @@ class PipelineService:
             state["synced_fp_ids"] = sorted(synced)
             state["pending_events"] = pending
             self._save_sync_state(state)
+
+    def _mark_fp_uploaded(self, fp_id: int) -> None:
+        with self._sync_lock:
+            state = self._load_sync_state()
+            uploaded = {int(x) for x in state.get("uploaded_fp_ids", [])}
+            uploaded.add(int(fp_id))
+            pending = []
+            for ev in state.get("pending_events", []):
+                if self._payload_fp_id(ev) != int(fp_id):
+                    pending.append(ev)
+            state["uploaded_fp_ids"] = sorted(uploaded)
+            state["pending_events"] = pending
+            self._save_sync_state(state)
+
+    @staticmethod
+    def _is_container_image(image_bytes: bytes) -> bool:
+        return (
+            image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+            or image_bytes.startswith(b"\xff\xd8\xff")
+            or image_bytes.startswith(b"II*\x00")
+            or image_bytes.startswith(b"MM\x00*")
+        )
+
+    def _convert_image_to_tiff(self, image_bytes: bytes) -> bytes:
+        if not image_bytes:
+            return image_bytes
+        if image_bytes.startswith((b"II*\x00", b"MM\x00*")):
+            return image_bytes
+
+        from io import BytesIO
+        from PIL import Image
+
+        if len(image_bytes) == int(self._settings.image_width) * int(self._settings.image_height):
+            image = Image.frombytes(
+                "L",
+                (int(self._settings.image_width), int(self._settings.image_height)),
+                image_bytes,
+            )
+        elif self._is_container_image(image_bytes):
+            image = Image.open(BytesIO(image_bytes))
+        else:
+            return image_bytes
+
+        if image.mode != "L":
+            image = image.convert("L")
+
+        output = BytesIO()
+        image.save(output, format="TIFF")
+        return output.getvalue()
+
+    def _pending_image_path(self, fp_id: int) -> Path:
+        return self._pending_image_dir / "fp_{}.tif".format(int(fp_id))
+
+    def _store_pending_image(self, fp_id: int, image_bytes: Optional[bytes]) -> None:
+        if not image_bytes:
+            return
+        try:
+            tiff_bytes = self._convert_image_to_tiff(image_bytes)
+            path = self._pending_image_path(fp_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(tiff_bytes)
+        except Exception as exc:
+            logger.warning("Failed to persist pending enrollment image fp_id=%d: %s", fp_id, exc)
+
+    def upload_pending_enrollment_image(
+        self,
+        fp_id: int,
+        upload_url: str,
+        content_type: str = "image/tiff",
+    ) -> bool:
+        path = self._pending_image_path(fp_id)
+        if not path.exists():
+            logger.warning("Pending enrollment image not found for fp_id=%d", fp_id)
+            return False
+
+        try:
+            response = requests.put(
+                upload_url,
+                data=path.read_bytes(),
+                headers={"Content-Type": content_type},
+                timeout=300,
+            )
+            response.raise_for_status()
+            self._mark_fp_uploaded(fp_id)
+            try:
+                path.unlink()
+            except Exception:
+                pass
+            logger.info("Uploaded pending enrollment image for fp_id=%d", fp_id)
+            return True
+        except Exception as exc:
+            logger.warning("Failed to upload pending enrollment image fp_id=%d: %s", fp_id, exc)
+            return False
 
     def _queue_pending_event(self, payload: Dict[str, Any]) -> None:
         fp_id = self._payload_fp_id(payload)
@@ -988,11 +1122,9 @@ class PipelineService:
         finger_index: int,
         embedding_list: List[float],
         quality_score: float,
-        image_bytes: Optional[bytes] = None,
     ) -> Dict[str, Any]:
-        import base64
-
         user_dict = user_obj.to_dict() if hasattr(user_obj, "to_dict") else {}
+        pending_image_exists = self._pending_image_path(fp_id).exists()
         payload = {
             "event": "enrollment",
             "worker_id": self._settings.device_id,
@@ -1008,18 +1140,14 @@ class PipelineService:
                 "finger_index": finger_index,
                 "embedding": embedding_list,
                 "quality_score": quality_score,
+                "image_available": pending_image_exists,
+                "image_format": "tiff" if pending_image_exists else "",
             },
             "model": {
                 "name": self._active_model or "local",
                 "embedding_dim": len(embedding_list),
             },
         }
-        if image_bytes:
-            payload["fingerprint"]["image_base64"] = base64.b64encode(image_bytes).decode(
-                "ascii"
-            )
-            payload["fingerprint"]["image_width"] = int(self._settings.image_width)
-            payload["fingerprint"]["image_height"] = int(self._settings.image_height)
         return payload
 
     def sync_offline_enrollments(self) -> int:
@@ -1035,6 +1163,7 @@ class PipelineService:
         with self._sync_lock:
             state = self._load_sync_state()
             synced = {int(x) for x in state.get("synced_fp_ids", [])}
+            uploaded = {int(x) for x in state.get("uploaded_fp_ids", [])}
             pending = state.get("pending_events", [])
             pending_ids = {
                 self._payload_fp_id(ev)
@@ -1043,7 +1172,7 @@ class PipelineService:
             }
 
             for fp_id, user_id, embedding_enc in self._fp_repo.get_active_embeddings():
-                if fp_id in synced or fp_id in pending_ids:
+                if fp_id in uploaded or fp_id in pending_ids:
                     continue
 
                 fp_obj = self._fp_repo.get_by_id(fp_id)
@@ -1070,7 +1199,6 @@ class PipelineService:
                     finger_index=fp_obj.finger_index,
                     embedding_list=embedding_list,
                     quality_score=fp_obj.quality_score,
-                    image_bytes=None,
                 )
                 pending.append(payload)
 
@@ -1088,6 +1216,7 @@ class PipelineService:
             pending = state.get("pending_events", [])
             still_pending: List[Dict[str, Any]] = []
             synced = {int(x) for x in state.get("synced_fp_ids", [])}
+            uploaded = {int(x) for x in state.get("uploaded_fp_ids", [])}
 
             for payload in pending:
                 topic = "worker/{}/enrolled".format(self._settings.device_id)
@@ -1096,11 +1225,14 @@ class PipelineService:
                     fp_id = self._payload_fp_id(payload)
                     if fp_id is not None:
                         synced.add(fp_id)
+                        if not payload.get("fingerprint", {}).get("image_available"):
+                            uploaded.add(fp_id)
                     sent += 1
                 else:
                     still_pending.append(payload)
 
             state["synced_fp_ids"] = sorted(synced)
+            state["uploaded_fp_ids"] = sorted(uploaded)
             state["pending_events"] = still_pending
             self._save_sync_state(state)
 
@@ -1115,7 +1247,6 @@ class PipelineService:
         finger_index: int,
         embedding_list: List[float],
         quality_score: float,
-        image_bytes: Optional[bytes] = None,
     ) -> None:
         """Publish a new enrollment event to orchestrator via MQTT.
 
@@ -1128,7 +1259,6 @@ class PipelineService:
             finger_index=finger_index,
             embedding_list=embedding_list,
             quality_score=quality_score,
-            image_bytes=image_bytes,
         )
 
         mqtt_client = self._get_mqtt_client_if_connected()
@@ -1144,6 +1274,8 @@ class PipelineService:
         ok = mqtt_client.publish(topic, json.dumps(payload), qos=1)
         if ok:
             self._mark_fp_synced(fp_id)
+            if not payload.get("fingerprint", {}).get("image_available"):
+                self._mark_fp_uploaded(fp_id)
             logger.info(
                 "📤 Enrollment event published for user %s (fp_id=%d)",
                 user_dict.get("full_name", "?"),
@@ -1172,6 +1304,8 @@ class PipelineService:
         """
         user_data = data.get("user", {})
         fp_data = data.get("fingerprint", {})
+        source_worker_id = str(data.get("worker_id", "") or "")
+        source_fp_id = fp_data.get("fp_id")
 
         remote_user_id = user_data.get("id")
         employee_id = user_data.get("employee_id", "")
@@ -1188,6 +1322,7 @@ class PipelineService:
             return False
 
         loop = asyncio.get_event_loop()
+        sync_hash = "synced:{}:{}".format(source_worker_id or "remote", source_fp_id)
 
         try:
             # --- Upsert user ---
@@ -1212,6 +1347,20 @@ class PipelineService:
                 logger.warning("Sync: no user repo, cannot persist.")
                 return False
 
+            if self._fp_repo is not None:
+                existing_fp = await loop.run_in_executor(
+                    None,
+                    self._fp_repo.get_by_image_hash,
+                    sync_hash,
+                    True,
+                )
+                if existing_fp is not None:
+                    logger.info(
+                        "Sync: fingerprint already present locally, skip duplicate sync (%s)",
+                        sync_hash,
+                    )
+                    return True
+
             # --- Encrypt and save fingerprint ---
             embedding_enc = None
             if self._crypto is not None:
@@ -1227,7 +1376,7 @@ class PipelineService:
                 finger_index=finger_index,
                 embedding_enc=embedding_enc,
                 quality_score=quality_score,
-                image_hash="synced",
+                image_hash=sync_hash,
             )
 
             if self._fp_repo is not None:

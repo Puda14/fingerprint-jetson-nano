@@ -105,6 +105,24 @@ class ModelUpdatePayload:
         self.relative_path: str = kwargs.get("relative_path", "")
 
 
+class EnrollmentUploadPayload:
+    """Command to upload a locally cached enrollment image to MinIO."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.fp_id: int = int(kwargs.get("fp_id", 0) or 0)
+        self.fingerprint_id: str = kwargs.get("fingerprint_id", "")
+        self.object_name: str = kwargs.get("object_name", "")
+        self.upload_url: str = kwargs.get("upload_url", "")
+        self.content_type: str = kwargs.get("content_type", "image/tiff")
+
+
+class SyncCheckPayload:
+    """Command from orchestrator asking worker to flush pending offline data."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.reason: str = kwargs.get("reason", "reconnect")
+
+
 # ── Worker → Orchestrator payloads ───────────────────────────────────────────
 
 

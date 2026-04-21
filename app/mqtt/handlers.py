@@ -18,9 +18,11 @@ import threading
 import paho.mqtt.client as mqtt
 
 from app.mqtt.payloads import (
+    EnrollmentUploadPayload,
     ModelStatusPayload,
     ModelUpdatePayload,
     RegisterTaskPayload,
+    SyncCheckPayload,
     TaskPayload,
     VerifyTaskPayload,
 )
@@ -49,6 +51,32 @@ def create_message_handler(mqtt_client_ref: Any) -> Any:
                     thread = threading.Thread(
                         target=_handle_model_update,
                         args=(mqtt_client_ref, payload),
+                        daemon=True,
+                    )
+                    thread.start()
+                    return
+
+                if len(parts) >= 4 and parts[2] == "sync" and parts[3] == "check":
+                    payload = SyncCheckPayload(**data)
+                    logger.info("📥 SYNC CHECK: reason=%s", payload.reason)
+                    thread = threading.Thread(
+                        target=_handle_sync_check,
+                        args=(mqtt_client_ref,),
+                        daemon=True,
+                    )
+                    thread.start()
+                    return
+
+                if len(parts) >= 4 and parts[2] == "enrollment" and parts[3] == "upload":
+                    payload = EnrollmentUploadPayload(**data)
+                    logger.info(
+                        "📥 ENROLLMENT UPLOAD: fp_id=%s object=%s",
+                        payload.fp_id,
+                        payload.object_name,
+                    )
+                    thread = threading.Thread(
+                        target=_handle_enrollment_upload,
+                        args=(mqtt_client_ref, data),
                         daemon=True,
                     )
                     thread.start()
@@ -190,6 +218,49 @@ def _handle_sync_task(mqtt_client_ref: Any, task_data: dict) -> None:
         task_svc.process_sync(task_data)
     except Exception as exc:
         logger.error("Sync task failed: %s", exc)
+
+
+def _handle_sync_check(mqtt_client_ref: Any) -> None:
+    """Flush pending offline enrollments when the orchestrator asks for them."""
+    try:
+        from app.services.pipeline_service import get_pipeline_service_sync
+
+        svc = get_pipeline_service_sync()
+        sent = svc.sync_offline_enrollments()
+        logger.info("SYNC CHECK completed: sent %d pending enrollment event(s)", sent)
+    except Exception as exc:
+        logger.error("Sync check failed: %s", exc)
+
+
+def _handle_enrollment_upload(mqtt_client_ref: Any, task_data: dict) -> None:
+    """Upload a cached enrollment image to a presigned MinIO URL."""
+    try:
+        from app.services.pipeline_service import get_pipeline_service_sync
+
+        fp_id = int(task_data.get("fp_id", 0) or 0)
+        upload_url = task_data.get("upload_url", "")
+        object_name = task_data.get("object_name", "")
+        fingerprint_id = task_data.get("fingerprint_id", "")
+        content_type = task_data.get("content_type", "image/tiff")
+
+        svc = get_pipeline_service_sync()
+        ok = svc.upload_pending_enrollment_image(
+            fp_id=fp_id,
+            upload_url=upload_url,
+            content_type=content_type,
+        )
+
+        status_payload = {
+            "worker_id": mqtt_client_ref.worker_id,
+            "fp_id": fp_id,
+            "fingerprint_id": fingerprint_id,
+            "object_name": object_name,
+            "status": "uploaded" if ok else "failed",
+        }
+        topic = "worker/{}/enrollment/upload/status".format(mqtt_client_ref.worker_id)
+        mqtt_client_ref.publish(topic, json.dumps(status_payload), qos=1)
+    except Exception as exc:
+        logger.error("Enrollment upload failed: %s", exc)
 
 
 def _handle_model_update(mqtt_client_ref: Any, payload: ModelUpdatePayload) -> None:

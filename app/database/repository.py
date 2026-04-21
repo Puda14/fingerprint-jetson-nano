@@ -160,6 +160,15 @@ class FingerprintRepository:
         rows = self._db.fetch_all(sql, (user_id,))
         return [Fingerprint.from_row(r) for r in rows]
 
+    def get_by_image_hash(self, image_hash, active_only=True):
+        # type: (str, bool) -> Optional[Fingerprint]
+        sql = "SELECT * FROM fingerprints WHERE image_hash = ?"
+        if active_only:
+            sql += " AND is_active = 1"
+        sql += " ORDER BY id DESC LIMIT 1"
+        row = self._db.fetch_one(sql, (image_hash,))
+        return Fingerprint.from_row(row) if row else None
+
     def get_active_embeddings(self):
         # type: () -> List[Tuple[int, int, bytes]]
         """Return (fp_id, user_id, embedding_enc) for all active fingerprints.
