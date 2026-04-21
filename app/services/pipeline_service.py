@@ -249,19 +249,20 @@ class PipelineService:
         wants_tensorrt = self._settings.backend == "tensorrt"
 
         if wants_tensorrt and model_suffix == ".onnx":
+            if not _is_onnxruntime_available():
+                self._active_model = None
+                self._model_loaded = False
+                logger.error(
+                    "TensorRT backend requested, but no runnable TensorRT engine is available "
+                    "and onnxruntime is not installed for ONNX fallback: %s",
+                    model_path,
+                )
+                return
             logger.warning(
                 "TensorRT backend requested but no runnable TensorRT engine is available; "
                 "falling back to ONNX model %s",
                 model_path,
             )
-            if not _is_onnxruntime_available():
-                self._active_model = None
-                self._model_loaded = False
-                logger.error(
-                    "Cannot load fallback ONNX model %s because onnxruntime is not installed.",
-                    model_path,
-                )
-                return
 
         if model_suffix in (".engine", ".trt") and not wants_tensorrt:
             logger.info(

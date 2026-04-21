@@ -1,6 +1,7 @@
 """FastAPI entrypoint for the Jetson worker."""
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,8 @@ from app.api.routers.verification import ws_verify
 from app.core.config import get_settings
 from app.core.lifespan import shutdown, startup
 
+logger = logging.getLogger(__name__)
+
 
 def _configure_logging(debug=False):
     level = logging.DEBUG if debug else logging.INFO
@@ -30,6 +33,7 @@ def _configure_logging(debug=False):
 def create_app():
     settings = get_settings()
     _configure_logging(settings.debug)
+    logger.info("Worker package source: %s", Path(__file__).resolve())
 
     app = FastAPI(
         title="Fingerprint Jetson Nano Worker",

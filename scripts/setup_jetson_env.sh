@@ -149,10 +149,14 @@ install_python_deps() {
     backend="$(read_backend)"
     if [ "$backend" = "onnx" ]; then
         echo "WORKER_BACKEND=onnx detected -> syncing ONNX extra"
-        "$UV_BIN" sync --active --no-editable --extra onnx
+        "$UV_BIN" sync --active --no-editable --extra onnx \
+            --refresh-package fingerprint-jetson-worker \
+            --reinstall-package fingerprint-jetson-worker
     else
         echo "WORKER_BACKEND=$backend -> syncing Jetson/TensorRT environment"
-        "$UV_BIN" sync --active --no-editable --extra jetson
+        "$UV_BIN" sync --active --no-editable --extra jetson \
+            --refresh-package fingerprint-jetson-worker \
+            --reinstall-package fingerprint-jetson-worker
     fi
 }
 

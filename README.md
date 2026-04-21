@@ -14,11 +14,25 @@ source venv/bin/activate
 uv sync --active --no-editable --extra jetson
 ```
 
+Because the package is installed with `--no-editable`, a plain `git pull` can
+leave `uv` reusing a cached wheel for `fingerprint-jetson-worker` if the
+package version has not changed. After pulling code changes, force-refresh the
+local package before starting the worker:
+
+```bash
+source venv/bin/activate
+uv sync --active --no-editable --extra jetson \
+  --refresh-package fingerprint-jetson-worker \
+  --reinstall-package fingerprint-jetson-worker
+```
+
 If you need the ONNX fallback environment instead of TensorRT:
 
 ```bash
 source venv/bin/activate
-uv sync --active --no-editable --extra onnx
+uv sync --active --no-editable --extra onnx \
+  --refresh-package fingerprint-jetson-worker \
+  --reinstall-package fingerprint-jetson-worker
 ```
 
 ## Run
