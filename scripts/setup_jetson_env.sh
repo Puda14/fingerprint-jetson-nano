@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 VENV_DIR="$PROJECT_ROOT/venv"
 SKIP_APT="${SKIP_APT:-0}"
+RECREATE_VENV="${RECREATE_VENV:-1}"
 PYTHON_BIN="${WORKER_PYTHON_BIN:-python3}"
 UV_BIN="${WORKER_UV_BIN:-uv}"
 
@@ -109,12 +110,17 @@ create_project_env() {
         exit 1
     fi
 
-    if [ -d "$VENV_DIR" ]; then
+    if [ -d "$VENV_DIR" ] && [ "$RECREATE_VENV" = "1" ]; then
         echo "Removing old venv at $VENV_DIR"
         rm -rf "$VENV_DIR"
     fi
 
-    "$UV_BIN" venv --python "$PYTHON_BIN" --system-site-packages "$VENV_DIR"
+    if [ ! -x "$VENV_DIR/bin/python" ]; then
+        "$UV_BIN" venv --python "$PYTHON_BIN" --system-site-packages "$VENV_DIR"
+    else
+        echo "Reusing existing venv at $VENV_DIR"
+    fi
+
     # shellcheck disable=SC1090
     source "$VENV_DIR/bin/activate"
 
@@ -149,12 +155,12 @@ install_python_deps() {
     backend="$(read_backend)"
     if [ "$backend" = "onnx" ]; then
         echo "WORKER_BACKEND=onnx detected -> syncing ONNX extra"
-        "$UV_BIN" sync --active --no-editable --extra onnx \
+        "$UV_BIN" sync --active --inexact --no-editable --extra onnx \
             --refresh-package fingerprint-jetson-worker \
             --reinstall-package fingerprint-jetson-worker
     else
         echo "WORKER_BACKEND=$backend -> syncing Jetson/TensorRT environment"
-        "$UV_BIN" sync --active --no-editable --extra jetson \
+        "$UV_BIN" sync --active --inexact --no-editable --extra jetson \
             --refresh-package fingerprint-jetson-worker \
             --reinstall-package fingerprint-jetson-worker
     fi
@@ -210,11 +216,11 @@ install_pycuda_for_tensorrt() {
 
     # pycuda's legacy setup.py dependency resolution tends to pull modern
     # pytools/siphash24 packages that do not play nicely with Python 3.6.
-    pip install "pytools==2021.2.9"
+    python -m pip install "pytools==2021.2.9"
 
     python3 configure.py --cuda-root="$CUDA_ROOT" --no-use-shipped-boost
     python3 setup.py build
-    python3 -m pip install --no-deps --no-build-isolation .
+    python3 setup.py install
 
     cd "$PROJECT_ROOT"
     trap - EXIT
@@ -385,6 +391,7 @@ main() {
     echo "Activate with: source $VENV_DIR/bin/activate"
     echo "Run backend:   python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
     echo "Run GUI:       python3 -m gui"
+    echo "Refresh env:   SKIP_APT=1 RECREATE_VENV=0 ./scripts/setup_jetson_env.sh"
 }
 
 
