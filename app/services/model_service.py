@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import threading
 import time
@@ -42,7 +43,7 @@ class ModelService:
         self._settings = get_settings()
         self._model_dir = Path(self._settings.model_dir)
         self._model_dir.mkdir(parents=True, exist_ok=True)
-        self._loaded_models: Dict[str, str] = {}  # {"embedding": "model.onnx", ...}
+        self._loaded_models: Dict[str, str] = {}  # {"embedding": "embedding_v1", ...}
         self._lock = threading.Lock()
         self._load_state()
 
@@ -53,7 +54,14 @@ class ModelService:
         try:
             if os.path.exists(_STATE_FILE):
                 with open(_STATE_FILE, "r") as f:
-                    self._loaded_models = json.load(f)
+                    raw_state = json.load(f)
+                normalized_state = {
+                    model_type: self._normalize_loaded_ref(model_ref)
+                    for model_type, model_ref in raw_state.items()
+                }
+                self._loaded_models = normalized_state
+                if normalized_state != raw_state:
+                    self._save_state()
                 logger.info("Loaded model state: %s", self._loaded_models)
         except Exception as exc:
             logger.error("Failed to load model state: %s", exc)
@@ -97,13 +105,30 @@ class ModelService:
         model_name: str,
         relative_path: str = "",
     ) -> str:
-        if not relative_path:
-            return model_name
+        if model_name:
+            return self._normalize_loaded_ref(model_name)
+        if relative_path:
+            return self._normalize_loaded_ref(relative_path)
+        return ""
 
-        rel_path = Path(relative_path)
-        if rel_path.parent != Path("."):
-            return rel_path.parent.as_posix()
-        return rel_path.name
+    def _normalize_loaded_ref(self, model_ref: str) -> str:
+        ref = str(model_ref or "").strip()
+        if not ref:
+            return ""
+
+        ref_path = Path(ref)
+        if ref_path.parent != Path("."):
+            parent_name = ref_path.parent.name
+            if parent_name:
+                return parent_name
+
+        name = ref_path.name
+        suffix = ref_path.suffix.lower()
+        if suffix in _MODEL_EXTENSIONS:
+            name = ref_path.stem
+
+        normalized = re.sub(r"_(fp16|fp32|int8)$", "", name, flags=re.IGNORECASE)
+        return normalized or name
 
     def _resolve_loaded_scope(self, model_type: str) -> Optional[Path]:
         with self._lock:
@@ -112,16 +137,25 @@ class ModelService:
         if not model_ref:
             return None
 
-        candidate = self._model_dir / model_type / model_ref
+        type_dir = self._model_dir / model_type
+        candidate = type_dir / model_ref
         if candidate.exists():
             return candidate
 
-        type_dir = self._model_dir / model_type
         if not type_dir.exists():
             return None
 
-        matches = sorted(type_dir.rglob(model_ref))
+        normalized_ref = self._normalize_loaded_ref(model_ref)
+        matches = sorted(
+            path for path in type_dir.rglob("*")
+            if path.is_file()
+            and path.suffix.lower() in _MODEL_EXTENSIONS
+            and self._normalize_loaded_ref(path.relative_to(type_dir).as_posix()) == normalized_ref
+        )
         if matches:
+            parent_dirs = {match.parent for match in matches}
+            if len(parent_dirs) == 1:
+                return matches[0].parent
             return matches[0]
         return None
 
