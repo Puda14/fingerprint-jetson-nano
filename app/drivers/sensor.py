@@ -6,11 +6,15 @@ Moved from mdgt_edge/sensor/base.py to app/drivers/ to remove dependency
 on mdgt_edge package.
 """
 
-from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator, TypeVar, Type, Awaitable, Sequence, Mapping
+from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum
+import logging
 import threading
+
+
+logger = logging.getLogger(__name__)
 
 
 class LEDColor(IntEnum):
@@ -125,15 +129,17 @@ class USBSensorDriver(SensorDriver):
                 self._reader = FingerprintReader()
                 result = self._reader.open()
                 self._connected = bool(result)
-                print(f"[DEBUG SENSOR] _reader.open() returned: {result}")
+                logger.info("USB sensor open() returned: %s", result)
                 return self._connected
-            except ImportError as e:
-                print(f"[DEBUG SENSOR] ImportError loading SDK from {self._sdk_path}: {e}")
+            except ImportError as exc:
+                logger.warning(
+                    "Failed to import fingerprint SDK from %s: %s",
+                    self._sdk_path,
+                    exc,
+                )
                 return False
-            except Exception as e:
-                print(f"[DEBUG SENSOR] Crash in open(): {e}")
-                import traceback
-                traceback.print_exc()
+            except Exception as exc:
+                logger.warning("USB sensor open() failed: %s", exc)
                 return False
 
     def close(self) -> None:

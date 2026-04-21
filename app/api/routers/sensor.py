@@ -1,7 +1,7 @@
 """Sensor endpoints: status, single capture, LED control, live stream via WebSocket."""
 
 
-from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator, TypeVar, Type, Awaitable, Sequence, Mapping
+from typing import Optional
 import asyncio
 import base64
 import json
@@ -164,7 +164,7 @@ async def ws_sensor_stream(websocket: WebSocket) -> None:
                     break
             await asyncio.sleep(1.0 / target_fps)
 
-    stream_task: asyncio.Optional[Task] = None
+    stream_task = None
 
     try:
         while True:

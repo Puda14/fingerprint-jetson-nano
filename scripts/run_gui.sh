@@ -43,7 +43,7 @@ trap cleanup EXIT
 # 1. Start backend
 # ---------------------------------------------------------------------------
 echo -e "${GREEN}Starting FastAPI backend on ${HOST}:${PORT}...${NC}"
-python3 -m uvicorn app.main:app --host "$HOST" --port "$PORT" --log-level info &
+fingerprint-worker-api &
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"
 
@@ -71,6 +71,6 @@ done
 # ---------------------------------------------------------------------------
 echo -e "${GREEN}Launching GUI...${NC}"
 export WORKER_GUI_API_URL="$API_URL"
-python3 -m gui
+fingerprint-worker-gui
 
 echo -e "${GREEN}GUI closed.${NC}"

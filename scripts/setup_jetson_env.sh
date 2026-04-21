@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 VENV_DIR="$PROJECT_ROOT/venv"
 SKIP_APT="${SKIP_APT:-0}"
+PYTHON_BIN="${WORKER_PYTHON_BIN:-python3}"
+UV_BIN="${WORKER_UV_BIN:-uv}"
 
 
 log_step() {
@@ -97,16 +99,26 @@ install_system_deps() {
 create_project_env() {
     log_step "2. Creating project venv with system packages"
 
+    if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+        echo "ERROR: $PYTHON_BIN not found."
+        exit 1
+    fi
+
+    if ! command -v "$UV_BIN" >/dev/null 2>&1; then
+        echo "ERROR: $UV_BIN not found. Install uv first: https://docs.astral.sh/uv/"
+        exit 1
+    fi
+
     if [ -d "$VENV_DIR" ]; then
         echo "Removing old venv at $VENV_DIR"
         rm -rf "$VENV_DIR"
     fi
 
-    python3 -m venv --system-site-packages "$VENV_DIR"
+    "$UV_BIN" venv --python "$PYTHON_BIN" --system-site-packages "$VENV_DIR"
     # shellcheck disable=SC1090
     source "$VENV_DIR/bin/activate"
 
-    python3 -m pip install --upgrade \
+    python -m pip install --upgrade \
         "pip<22" \
         "setuptools<60" \
         "wheel<0.38"
@@ -128,24 +140,19 @@ prepare_project_files() {
 
 
 install_python_deps() {
-    log_step "4. Installing Python dependencies"
+    log_step "4. Syncing worker dependencies with uv"
 
     # shellcheck disable=SC1090
     source "$VENV_DIR/bin/activate"
 
-    # Fresh venvs created with --system-site-packages should keep using the
-    # distro cryptography package on Python 3.6. Remove any stale pip copy that
-    # may have been injected by previous experiments before installing the app.
-    python3 -m pip uninstall -y cryptography onnxruntime onnxruntime-gpu >/dev/null 2>&1 || true
-    pip install -r "$PROJECT_ROOT/requirements.txt"
-
     local backend
     backend="$(read_backend)"
     if [ "$backend" = "onnx" ]; then
-        echo "WORKER_BACKEND=onnx detected -> installing optional ONNX deps"
-        pip install -r "$PROJECT_ROOT/requirements-onnx.txt"
+        echo "WORKER_BACKEND=onnx detected -> syncing ONNX extra"
+        "$UV_BIN" sync --active --extra onnx
     else
-        echo "WORKER_BACKEND=$backend -> skipping pip onnxruntime in default TensorRT setup"
+        echo "WORKER_BACKEND=$backend -> syncing Jetson/TensorRT environment"
+        "$UV_BIN" sync --active --extra jetson
     fi
 }
 

@@ -5,9 +5,7 @@ Uses FastAPI on_event hooks instead of asynccontextmanager lifespan
 for Python 3.6 compatibility (contextlib.asynccontextmanager requires 3.7+).
 """
 
-from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Callable, Generator, Iterable, AsyncIterator, TypeVar, Type, Awaitable, Sequence, Mapping
 import logging
-
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -32,6 +30,7 @@ async def startup(app: FastAPI) -> None:
     logger.info("=== Fingerprint Jetson Nano Worker starting up ===")
     logger.info("Device ID: %s", settings.device_id)
     logger.info("Inference backend: %s", settings.backend)
+    logger.info("Worker home: %s", settings.worker_home)
 
     # ------------------------------------------------------------------
     # Step 1: Create necessary directories
@@ -55,7 +54,6 @@ async def startup(app: FastAPI) -> None:
     # ------------------------------------------------------------------
     # Step 3: Initialize fingerprint sensor
     # ------------------------------------------------------------------
-    print("[STARTUP] Initializing fingerprint sensor...", flush=True)
     sensor = SensorService.get_instance()
     hardware_connected = await sensor.initialize(
         vid=settings.sensor_vid,
@@ -65,13 +63,10 @@ async def startup(app: FastAPI) -> None:
     )
     if settings.mock_mode:
         logger.info("Mock mode enabled — using sample fingerprint images.")
-        print("[STARTUP] Mock mode enabled.", flush=True)
     elif hardware_connected:
         logger.info("USB sensor connected successfully.")
-        print("[STARTUP] USB sensor connected OK!", flush=True)
     else:
-        logger.warning("USB sensor not found - using Mock sensor.")
-        print("[STARTUP] USB sensor NOT found, using Mock fallback.", flush=True)
+        logger.warning("USB sensor not found; using mock fallback.")
 
     # ------------------------------------------------------------------
     # Step 4: Initialize inference pipeline
