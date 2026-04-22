@@ -216,6 +216,13 @@ class MQTTWorkerClient:
             self._stop_event.wait(timeout=self._settings.heartbeat_interval)
 
     def _send_heartbeat(self, status: WorkerStatus = WorkerStatus.IDLE) -> None:
+        # Collect system metrics
+        try:
+            from app.core.metrics_collector import collect as collect_metrics
+            metrics = collect_metrics()
+        except Exception:
+            metrics = None
+
         # Gather loaded models info
         try:
             from app.services.model_service import get_model_service_sync
@@ -236,6 +243,13 @@ class MQTTWorkerClient:
         heartbeat = HeartbeatPayload(
             worker_id=self._worker_id,
             status=status.value if hasattr(status, "value") else status,
+            cpu_percent=metrics.cpu_percent if metrics else None,
+            ram_used_mb=metrics.ram_used_mb if metrics else None,
+            ram_total_mb=metrics.ram_total_mb if metrics else None,
+            gpu_percent=metrics.gpu_percent if metrics else None,
+            gpu_memory_used_mb=metrics.gpu_memory_used_mb if metrics else None,
+            gpu_memory_total_mb=metrics.gpu_memory_total_mb if metrics else None,
+            temperature_c=metrics.temperature_c if metrics else None,
             current_task_id=self._current_task_id,
             uptime_seconds=round(self.uptime, 1),
             loaded_models=loaded_models,

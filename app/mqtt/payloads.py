@@ -144,8 +144,13 @@ class HeartbeatPayload:
     def __init__(self, **kwargs: Any) -> None:
         self.worker_id: str = kwargs.get("worker_id", "")
         self.status: str = kwargs.get("status", "idle")
+        self.cpu_percent: Optional[float] = kwargs.get("cpu_percent", None)
+        self.ram_used_mb: Optional[float] = kwargs.get("ram_used_mb", None)
+        self.ram_total_mb: Optional[float] = kwargs.get("ram_total_mb", None)
+        self.gpu_percent: Optional[float] = kwargs.get("gpu_percent", None)
         self.gpu_memory_used_mb: Optional[float] = kwargs.get("gpu_memory_used_mb", None)
         self.gpu_memory_total_mb: Optional[float] = kwargs.get("gpu_memory_total_mb", None)
+        self.temperature_c: Optional[float] = kwargs.get("temperature_c", None)
         self.current_task_id: Optional[str] = kwargs.get("current_task_id", None)
         self.uptime_seconds: Optional[float] = kwargs.get("uptime_seconds", None)
         self.loaded_models: Dict[str, str] = kwargs.get("loaded_models", {})
