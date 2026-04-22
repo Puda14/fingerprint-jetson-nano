@@ -313,7 +313,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(16)
 
-        # Create user card
+        # Single unified registration card
         card = QFrame()
         card.setProperty("card", True)
         card.setStyleSheet(
@@ -323,14 +323,22 @@ class MainWindow(QMainWindow):
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(12)
 
-        title = QLabel("Create New User & Enroll")
+        title = QLabel("Register New User")
         title.setStyleSheet("color: #f0f6fc; font-size: 18px; font-weight: 700;")
         card_layout.addWidget(title)
 
-        desc = QLabel("Enter user information. After creation, place finger on sensor to enroll.")
+        desc = QLabel(
+            "Fill in user info, place finger on sensor, then click Register. "
+            "User and fingerprint are saved together."
+        )
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #8b949e; font-size: 12px;")
         card_layout.addWidget(desc)
+
+        # Step 1: User info
+        step1 = QLabel("① User Information")
+        step1.setStyleSheet("color: #58a6ff; font-size: 14px; font-weight: 600; margin-top: 8px;")
+        card_layout.addWidget(step1)
 
         form = QFormLayout()
         form.setSpacing(10)
@@ -350,51 +358,34 @@ class MainWindow(QMainWindow):
 
         card_layout.addLayout(form)
 
-        self.btn_create = QPushButton("Create User")
-        self.btn_create.setObjectName("btn_primary")
-        self.btn_create.setMinimumHeight(40)
-        self.btn_create.clicked.connect(self._do_create_user)
-        card_layout.addWidget(self.btn_create)
+        # Step 2: Finger hint
+        step2 = QLabel("② Place Finger on Sensor")
+        step2.setStyleSheet("color: #58a6ff; font-size: 14px; font-weight: 600; margin-top: 8px;")
+        card_layout.addWidget(step2)
 
-        self.lbl_create_status = QLabel("")
-        self.lbl_create_status.setWordWrap(True)
-        card_layout.addWidget(self.lbl_create_status)
+        finger_hint = QLabel(
+            "Check the sidebar preview — ensure finger is detected and quality ≥ 30 before clicking Register."
+        )
+        finger_hint.setWordWrap(True)
+        finger_hint.setStyleSheet("color: #8b949e; font-size: 12px;")
+        card_layout.addWidget(finger_hint)
+
+        # Step 3: Register button
+        step3 = QLabel("③ Save")
+        step3.setStyleSheet("color: #58a6ff; font-size: 14px; font-weight: 600; margin-top: 8px;")
+        card_layout.addWidget(step3)
+
+        self.btn_register = QPushButton("Register (Create User + Enroll Finger)")
+        self.btn_register.setObjectName("btn_primary")
+        self.btn_register.setMinimumHeight(44)
+        self.btn_register.clicked.connect(self._do_register)
+        card_layout.addWidget(self.btn_register)
+
+        self.lbl_register_status = QLabel("")
+        self.lbl_register_status.setWordWrap(True)
+        card_layout.addWidget(self.lbl_register_status)
 
         layout.addWidget(card)
-
-        # Enroll card
-        enroll_card = QFrame()
-        enroll_card.setProperty("card", True)
-        enroll_card.setStyleSheet(
-            "QFrame { background-color: #141c24; border: 1px solid #2b3642; "
-            "border-radius: 14px; padding: 20px; }"
-        )
-        ec_layout = QVBoxLayout(enroll_card)
-        ec_layout.setSpacing(10)
-
-        e_title = QLabel("Enroll Fingerprint")
-        e_title.setStyleSheet("color: #f0f6fc; font-size: 16px; font-weight: 600;")
-        ec_layout.addWidget(e_title)
-
-        e_desc = QLabel("Select a user, then place finger on sensor to enroll.")
-        e_desc.setWordWrap(True)
-        e_desc.setStyleSheet("color: #8b949e; font-size: 12px;")
-        ec_layout.addWidget(e_desc)
-
-        self.cmb_enroll_user = QComboBox()
-        ec_layout.addWidget(self.cmb_enroll_user)
-
-        self.btn_enroll = QPushButton("Enroll Finger")
-        self.btn_enroll.setObjectName("btn_accent")
-        self.btn_enroll.setMinimumHeight(38)
-        self.btn_enroll.clicked.connect(self._do_enroll)
-        ec_layout.addWidget(self.btn_enroll)
-
-        self.lbl_enroll_status = QLabel("")
-        self.lbl_enroll_status.setWordWrap(True)
-        ec_layout.addWidget(self.lbl_enroll_status)
-
-        layout.addWidget(enroll_card)
         layout.addStretch()
 
         scroll.setWidget(container)
@@ -451,8 +442,6 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(index)
         if index == 0:
             self._refresh_users()
-        elif index == 1:
-            self._refresh_enroll_dropdown()
 
     # ── Health polling ─────────────────────────────────────────────────────
 
@@ -512,84 +501,84 @@ class MainWindow(QMainWindow):
 
         self.lbl_user_count.setText("{} users".format(len(users)))
         self._users_cache = users
-        self._refresh_enroll_dropdown()
 
-    def _refresh_enroll_dropdown(self) -> None:
-        self.cmb_enroll_user.clear()
-        for u in getattr(self, "_users_cache", []):
-            display = "{} - {}".format(u.get("employee_id", ""), u.get("full_name", ""))
-            self.cmb_enroll_user.addItem(display, u.get("id", ""))
+    # ── Register (atomic: create user + enroll) ────────────────────────────
 
-    # ── Create user ────────────────────────────────────────────────────────
-
-    def _do_create_user(self) -> None:
+    def _do_register(self) -> None:
+        """Atomic registration: create user then immediately enroll fingerprint."""
         emp = self.inp_employee_id.text().strip()
         name = self.inp_full_name.text().strip()
         dept = self.inp_department.text().strip()
 
         if not emp or not name:
-            self.lbl_create_status.setText("Employee ID and Full Name are required.")
-            self.lbl_create_status.setStyleSheet("color: #f85149;")
+            self.lbl_register_status.setText("Employee ID and Full Name are required.")
+            self.lbl_register_status.setStyleSheet("color: #f85149;")
             return
 
-        self.btn_create.setEnabled(False)
-        self.lbl_create_status.setText("Creating user...")
-        self.lbl_create_status.setStyleSheet("color: #d29922;")
+        self.btn_register.setEnabled(False)
+        self.lbl_register_status.setText("Step 1/2: Creating user...")
+        self.lbl_register_status.setStyleSheet("color: #d29922;")
+
+        # Store form data for the enroll step
+        self._reg_emp = emp
+        self._reg_name = name
+        self._reg_dept = dept
 
         self._worker = ApiWorkerThread(self.client.create_user, emp, name, dept, "user")
-        self._worker.finished.connect(self._on_user_created)
+        self._worker.finished.connect(self._on_register_user_created)
         self._worker.start()
 
-    def _on_user_created(self, result: dict) -> None:
-        self.btn_create.setEnabled(True)
+    def _on_register_user_created(self, result: dict) -> None:
+        if not result.get("success"):
+            self.btn_register.setEnabled(True)
+            error = result.get("error", "Unknown error")
+            self.lbl_register_status.setText("✗ Failed to create user: {}".format(error))
+            self.lbl_register_status.setStyleSheet("color: #f85149;")
+            return
+
+        data = result.get("data", {})
+        self._reg_user_id = data.get("id", "")
+
+        # Immediately proceed to enroll
+        self.lbl_register_status.setText(
+            "Step 2/2: Enrolling fingerprint... keep finger on sensor"
+        )
+        self.lbl_register_status.setStyleSheet("color: #d29922;")
+
+        self._worker = ApiWorkerThread(
+            self.client.enroll_finger, self._reg_user_id, "right_index"
+        )
+        self._worker.finished.connect(self._on_register_enrolled)
+        self._worker.start()
+
+    def _on_register_enrolled(self, result: dict) -> None:
+        self.btn_register.setEnabled(True)
         if result.get("success"):
             data = result.get("data", {})
-            self.lbl_create_status.setText(
-                "✓ Created: {} ({})".format(data.get("full_name", ""), data.get("employee_id", ""))
+            quality = data.get("quality_score", 0)
+            self.lbl_register_status.setText(
+                "✓ Registered! {} ({}) — Quality: {:.0f}".format(
+                    self._reg_name, self._reg_emp, quality
+                )
             )
-            self.lbl_create_status.setStyleSheet("color: #3fb950;")
+            self.lbl_register_status.setStyleSheet("color: #3fb950; font-weight: 600;")
             self.inp_employee_id.clear()
             self.inp_full_name.clear()
             self.inp_department.clear()
             self._refresh_users()
         else:
-            error = result.get("error", "Unknown error")
-            self.lbl_create_status.setText("✗ {}".format(error))
-            self.lbl_create_status.setStyleSheet("color: #f85149;")
-
-    # ── Enroll finger ──────────────────────────────────────────────────────
-
-    def _do_enroll(self) -> None:
-        idx = self.cmb_enroll_user.currentIndex()
-        if idx < 0:
-            self.lbl_enroll_status.setText("No user selected.")
-            self.lbl_enroll_status.setStyleSheet("color: #f85149;")
-            return
-
-        user_id = self.cmb_enroll_user.currentData()
-        self.btn_enroll.setEnabled(False)
-        self.lbl_enroll_status.setText("Enrolling... keep finger on sensor")
-        self.lbl_enroll_status.setStyleSheet("color: #d29922;")
-
-        self._worker = ApiWorkerThread(self.client.enroll_finger, user_id, "right_index")
-        self._worker.finished.connect(self._on_enrolled)
-        self._worker.start()
-
-    def _on_enrolled(self, result: dict) -> None:
-        self.btn_enroll.setEnabled(True)
-        if result.get("success"):
-            data = result.get("data", {})
-            quality = data.get("quality_score", 0)
-            templates = data.get("template_count", 0)
-            self.lbl_enroll_status.setText(
-                "✓ Enrolled! Quality: {:.0f}  |  Templates: {}".format(quality, templates)
-            )
-            self.lbl_enroll_status.setStyleSheet("color: #3fb950; font-weight: 600;")
-            self._refresh_users()
-        else:
+            # User was created but enroll failed — delete the user to keep atomicity
             error = result.get("error", result.get("data", {}).get("message", "Failed"))
-            self.lbl_enroll_status.setText("✗ {}".format(error))
-            self.lbl_enroll_status.setStyleSheet("color: #f85149;")
+            self.lbl_register_status.setText(
+                "✗ Enroll failed: {}. User was rolled back.".format(error)
+            )
+            self.lbl_register_status.setStyleSheet("color: #f85149;")
+            # Rollback: delete the user that was just created
+            if getattr(self, "_reg_user_id", None):
+                rollback = ApiWorkerThread(self.client.delete_user, self._reg_user_id)
+                rollback.finished.connect(lambda _: self._refresh_users())
+                rollback.start()
+                self._rollback_worker = rollback  # prevent GC
 
     # ── Delete user ────────────────────────────────────────────────────────
 
