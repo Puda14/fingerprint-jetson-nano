@@ -284,8 +284,11 @@ class SystemHealth(BaseModel):
 class ConfigResponse(BaseModel):
     device_id: str
     verify_threshold: float
+    verify_margin: float
     identify_threshold: float
     identify_top_k: int
+    identify_margin: float
+    duplicate_identify_threshold: float
     model_dir: str
     data_dir: str
     sensor_vid: int
@@ -295,8 +298,11 @@ class ConfigResponse(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     verify_threshold: Optional[float] = None
+    verify_margin: Optional[float] = None
     identify_threshold: Optional[float] = None
     identify_top_k: Optional[int] = None
+    identify_margin: Optional[float] = None
+    duplicate_identify_threshold: Optional[float] = None
     debug: Optional[bool] = None
 
 

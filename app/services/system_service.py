@@ -130,8 +130,11 @@ class SystemService:
         base = {
             "device_id": s.device_id,
             "verify_threshold": s.verify_threshold,
+            "verify_margin": s.verify_margin,
             "identify_threshold": s.identify_threshold,
             "identify_top_k": s.identify_top_k,
+            "identify_margin": getattr(s, "identify_margin", 0.0),
+            "duplicate_identify_threshold": getattr(s, "duplicate_identify_threshold", 0.95),
             "model_dir": s.model_dir,
             "data_dir": s.data_dir,
             "sensor_vid": s.sensor_vid,
@@ -143,7 +146,15 @@ class SystemService:
 
     def update_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Update configurations allowed to change at runtime."""
-        allowed = {"verify_threshold", "identify_threshold", "identify_top_k", "debug"}
+        allowed = {
+            "verify_threshold",
+            "verify_margin",
+            "identify_threshold",
+            "identify_top_k",
+            "identify_margin",
+            "duplicate_identify_threshold",
+            "debug",
+        }
         for key, value in updates.items():
             if value is not None and key in allowed:
                 self._config_overrides[key] = value

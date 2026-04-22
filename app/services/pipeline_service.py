@@ -1084,6 +1084,25 @@ class PipelineService:
                     score=score,
                 ))
 
+        # Collapse multiple fingerprint hits of the same user to one best user-level result.
+        best_by_user = {}
+        for result in results:
+            current = best_by_user.get(result.user_id)
+            if current is None or result.score > current.score:
+                best_by_user[result.user_id] = result
+        results = sorted(best_by_user.values(), key=lambda item: item.score, reverse=True)
+
+        identify_margin = float(getattr(self._settings, "identify_margin", 0.0) or 0.0)
+        if identify_margin > 0 and len(results) >= 2:
+            if (results[0].score - results[1].score) < identify_margin:
+                logger.info(
+                    "Identify 1:N rejected by margin gate: best=%.4f second=%.4f margin=%.4f",
+                    results[0].score,
+                    results[1].score,
+                    identify_margin,
+                )
+                results = []
+
         # Log best match
         if self._log_repo is not None and log_attempt:
             best = results[0] if results else None
@@ -1327,24 +1346,44 @@ class PipelineService:
             logger.warning("Pending enrollment image not found for fp_id=%d", fp_id)
             return False
 
-        try:
-            response = requests.put(
-                upload_url,
-                data=path.read_bytes(),
-                headers={"Content-Type": content_type},
-                timeout=300,
-            )
-            response.raise_for_status()
-            self._mark_fp_uploaded(fp_id)
+        image_bytes = path.read_bytes()
+        last_error = None
+        for attempt in range(1, 4):
             try:
-                path.unlink()
-            except Exception:
-                pass
-            logger.info("Uploaded pending enrollment image for fp_id=%d", fp_id)
-            return True
-        except Exception as exc:
-            logger.warning("Failed to upload pending enrollment image fp_id=%d: %s", fp_id, exc)
-            return False
+                response = requests.put(
+                    upload_url,
+                    data=image_bytes,
+                    headers={"Content-Type": content_type},
+                    timeout=300,
+                )
+                response.raise_for_status()
+                self._mark_fp_uploaded(fp_id)
+                try:
+                    path.unlink()
+                except Exception:
+                    pass
+                logger.info(
+                    "Uploaded pending enrollment image for fp_id=%d on attempt %d",
+                    fp_id,
+                    attempt,
+                )
+                return True
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Failed to upload pending enrollment image fp_id=%d on attempt %d: %s",
+                    fp_id,
+                    attempt,
+                    exc,
+                )
+                time.sleep(min(2 * attempt, 5))
+
+        logger.warning(
+            "Giving up pending enrollment image upload fp_id=%d: %s",
+            fp_id,
+            last_error,
+        )
+        return False
 
     def _queue_pending_event(self, payload: Dict[str, Any]) -> None:
         fp_id = self._payload_fp_id(payload)
