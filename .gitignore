@@ -9,6 +9,7 @@ build/
 models/
 data/backups/
 data/mdgt_edge.db
+data/fingerprint.db
 
 # Virtual environment
 venv/
