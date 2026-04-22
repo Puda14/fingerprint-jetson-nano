@@ -2,28 +2,29 @@
 
 On Jetson Nano (aarch64), reads GPU load from sysfs and temperature from
 thermal zones.  On x86 development hosts, provides safe fallbacks.
+
+NOTE: Must stay compatible with Python 3.6 (Jetson Nano / JetPack 4.6).
 """
 
 import logging
 import platform
-from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 _IS_ARM = platform.machine().startswith("aarch64") or platform.machine().startswith("arm")
 
 
-@dataclass
-class SystemMetrics:
+class SystemMetrics(object):
     """Snapshot of system resource usage."""
-    cpu_percent: float = 0.0          # overall CPU usage %
-    ram_used_mb: float = 0.0          # RAM used (MB)
-    ram_total_mb: float = 0.0         # RAM total (MB)
-    gpu_percent: float = 0.0          # GPU utilisation %  (Tegra GR3D)
-    gpu_memory_used_mb: float = 0.0   # VRAM used (shared on Jetson)
-    gpu_memory_total_mb: float = 0.0  # VRAM total
-    temperature_c: float = 0.0        # SoC temperature (°C)
+
+    def __init__(self):
+        self.cpu_percent = 0.0          # overall CPU usage %
+        self.ram_used_mb = 0.0          # RAM used (MB)
+        self.ram_total_mb = 0.0         # RAM total (MB)
+        self.gpu_percent = 0.0          # GPU utilisation %  (Tegra GR3D)
+        self.gpu_memory_used_mb = 0.0   # VRAM used (shared on Jetson)
+        self.gpu_memory_total_mb = 0.0  # VRAM total
+        self.temperature_c = 0.0        # SoC temperature (°C)
 
 
 def _read_sysfs(path: str, default: str = "0") -> str:
