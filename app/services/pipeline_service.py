@@ -361,6 +361,16 @@ class PipelineService:
     def uptime_seconds(self) -> float:
         return time.time() - self._start_time
 
+    async def _capture_live_fingerprint(self):
+        from app.services.sensor_service import SensorService
+
+        sensor = SensorService.get_instance()
+        return await sensor.capture_when_ready(
+            min_quality=float(getattr(self._settings, "sensor_min_quality", 20.0)),
+            settle_ms=int(getattr(self._settings, "sensor_settle_ms", 250)),
+            timeout_sec=float(getattr(self._settings, "sensor_capture_timeout_sec", 5.0)),
+        )
+
     # -- user management (SQLite) --------------------------------------------
 
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -738,9 +748,7 @@ class PipelineService:
 
             # Capture image from sensor or use provided bytes
             if image_bytes is None:
-                from app.services.sensor_service import SensorService
-                sensor = SensorService.get_instance()
-                capture = await sensor.capture_image()
+                capture = await self._capture_live_fingerprint()
                 if not capture.success:
                     return EnrollResult(
                         user_id=user_id, finger=selected_finger,
@@ -778,26 +786,34 @@ class PipelineService:
                     success=False, message="No minutiae detected in image",
                 )
 
+            duplicate_threshold = max(
+                float(getattr(self._settings, "identify_threshold", 0.50)),
+                float(getattr(self._settings, "duplicate_identify_threshold", 0.72)),
+            )
             duplicate_candidates = await self.identify_1toN(
                 top_k=1,
                 image_bytes=image_bytes,
                 log_attempt=False,
+                threshold=duplicate_threshold,
             )
             if duplicate_candidates:
                 duplicate = duplicate_candidates[0]
-                return EnrollResult(
-                    user_id=user_id,
-                    finger=selected_finger,
-                    quality_score=quality,
-                    template_count=0,
-                    success=False,
-                    message=(
-                        "Fingerprint already enrolled: {} ({})".format(
-                            duplicate.full_name,
-                            duplicate.employee_id,
-                        )
-                    ),
-                )
+                same_user_duplicate_threshold = max(0.90, duplicate_threshold + 0.15)
+                is_same_user = int(duplicate.user_id) == int(user_id)
+                if (not is_same_user) or float(duplicate.score) >= same_user_duplicate_threshold:
+                    return EnrollResult(
+                        user_id=user_id,
+                        finger=selected_finger,
+                        quality_score=quality,
+                        template_count=0,
+                        success=False,
+                        message=(
+                            "Fingerprint already enrolled: {} ({})".format(
+                                duplicate.full_name,
+                                duplicate.employee_id,
+                            )
+                        ),
+                    )
 
             # Encrypt and save to DB
             embedding_list = embedding.tolist()
@@ -884,9 +900,7 @@ class PipelineService:
 
         # Capture image
         if image_bytes is None:
-            from app.services.sensor_service import SensorService
-            sensor = SensorService.get_instance()
-            capture = await sensor.capture_image()
+            capture = await self._capture_live_fingerprint()
             if not capture.success:
                 elapsed = (time.perf_counter() - start) * 1000
                 return VerifyResult(
@@ -1020,17 +1034,16 @@ class PipelineService:
         top_k: Optional[int] = None,
         image_bytes: Optional[bytes] = None,
         log_attempt: bool = True,
+        threshold: Optional[float] = None,
     ) -> List[IdentifyResult]:
         """1:N identification — search FAISS gallery for the best match."""
         top_k = top_k or self._settings.identify_top_k
-        threshold = self._settings.identify_threshold
+        threshold = self._settings.identify_threshold if threshold is None else threshold
         start = time.perf_counter()
 
         # Capture image
         if image_bytes is None:
-            from app.services.sensor_service import SensorService
-            sensor = SensorService.get_instance()
-            capture = await sensor.capture_image()
+            capture = await self._capture_live_fingerprint()
             if not capture.success:
                 return []
             image_bytes = capture.image_data

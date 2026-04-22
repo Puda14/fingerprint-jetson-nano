@@ -11,6 +11,7 @@ from typing import List, Dict, Tuple, Set, Optional, Any, Union, Coroutine, Call
 import asyncio
 import logging
 from functools import partial
+import time
 
 from app.drivers import (
     USBSensorDriver,
@@ -94,6 +95,47 @@ class SensorService:
             return CaptureResult(success=False, error="Sensor not initialized")
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._driver.capture_image)
+
+    async def capture_when_ready(
+        self,
+        min_quality: float = 20.0,
+        settle_ms: int = 250,
+        timeout_sec: float = 5.0,
+    ) -> CaptureResult:
+        """Wait until a finger is present and return a stable capture.
+
+        This reduces false matches caused by capturing too early or without
+        a real finger on the sensor surface.
+        """
+        if self._driver is None:
+            return CaptureResult(success=False, error="Sensor not initialized")
+
+        deadline = time.monotonic() + max(timeout_sec, 0.1)
+        saw_finger = False
+
+        while time.monotonic() < deadline:
+            finger_present = await self.check_finger()
+            if not finger_present:
+                await asyncio.sleep(0.08)
+                continue
+
+            saw_finger = True
+            await asyncio.sleep(max(settle_ms, 0) / 1000.0)
+            capture = await self.capture_image()
+            if (
+                capture.success
+                and capture.has_finger
+                and capture.quality_score >= min_quality
+            ):
+                return capture
+            await asyncio.sleep(0.08)
+
+        if saw_finger:
+            return CaptureResult(
+                success=False,
+                error="Finger detected but capture quality is too low",
+            )
+        return CaptureResult(success=False, error="No finger detected on sensor")
 
     async def check_finger(self) -> bool:
         if self._driver is None:

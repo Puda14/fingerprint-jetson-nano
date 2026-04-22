@@ -352,6 +352,7 @@ class MainWindow(QMainWindow):
 
         self.cmb_existing_user = QComboBox()
         self.cmb_existing_user.setMinimumWidth(280)
+        self.cmb_existing_user.currentIndexChanged.connect(self._on_existing_user_changed)
         mode_form.addRow("Existing User:", self.cmb_existing_user)
 
         card_layout.addLayout(mode_form)
@@ -546,17 +547,49 @@ class MainWindow(QMainWindow):
             idx = self.cmb_existing_user.findData(selected_user_id)
             if idx >= 0:
                 self.cmb_existing_user.setCurrentIndex(idx)
+        self._sync_register_fields()
 
-    def _on_register_mode_changed(self) -> None:
+    def _get_selected_existing_user(self) -> Optional[dict]:
+        selected_user_id = self.cmb_existing_user.currentData() if hasattr(self, "cmb_existing_user") else None
+        for user in getattr(self, "_users_cache", []):
+            if str(user.get("id", "")) == str(selected_user_id):
+                return user
+        return None
+
+    def _sync_register_fields(self) -> None:
         mode = self.cmb_register_mode.currentData()
         is_new = mode != "existing"
         self.cmb_existing_user.setEnabled(not is_new)
         for widget in getattr(self, "_new_user_fields", []):
             widget.setEnabled(is_new)
+
         if is_new:
             self.btn_register.setText("Register (Create User + Enroll Finger)")
-        else:
+            return
+
+        selected_user = self._get_selected_existing_user()
+        if selected_user is None:
+            self.inp_employee_id.clear()
+            self.inp_full_name.clear()
+            self.inp_department.clear()
             self.btn_register.setText("Register Finger For Existing User")
+            return
+
+        self.inp_employee_id.setText(selected_user.get("employee_id", ""))
+        self.inp_full_name.setText(selected_user.get("full_name", ""))
+        self.inp_department.setText(selected_user.get("department", ""))
+        self.btn_register.setText("Register Finger For Existing User")
+
+    def _on_register_mode_changed(self) -> None:
+        if self.cmb_register_mode.currentData() == "new":
+            self.inp_employee_id.clear()
+            self.inp_full_name.clear()
+            self.inp_department.clear()
+        self._sync_register_fields()
+
+    def _on_existing_user_changed(self) -> None:
+        if self.cmb_register_mode.currentData() == "existing":
+            self._sync_register_fields()
 
     # ── Register (atomic: create user + enroll) ────────────────────────────
 
@@ -571,14 +604,14 @@ class MainWindow(QMainWindow):
                 self.lbl_register_status.setStyleSheet("color: #f85149;")
                 return
 
-            user_name = self.cmb_existing_user.currentText()
+            selected_user = self._get_selected_existing_user() or {}
             self._reg_user_id = user_id
-            self._reg_name = user_name
-            self._reg_emp = ""
+            self._reg_name = selected_user.get("full_name", self.cmb_existing_user.currentText())
+            self._reg_emp = selected_user.get("employee_id", "")
             self._reg_created_user = False
             self.btn_register.setEnabled(False)
             self.lbl_register_status.setText(
-                "Enrolling fingerprint for {}... keep finger on sensor".format(user_name)
+                "Enrolling fingerprint for {}... keep finger on sensor".format(self._reg_name)
             )
             self.lbl_register_status.setStyleSheet("color: #d29922;")
             self._worker = ApiWorkerThread(self.client.enroll_finger, self._reg_user_id)

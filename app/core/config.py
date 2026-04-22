@@ -61,6 +61,22 @@ class Settings(BaseSettings):
         default=5,
         description="Max number of results returned in 1:N identification",
     )
+    sensor_min_quality: float = Field(
+        default=20.0,
+        description="Minimum capture quality required for enroll/verify/identify",
+    )
+    sensor_settle_ms: int = Field(
+        default=250,
+        description="Wait time after finger detection before final capture",
+    )
+    sensor_capture_timeout_sec: float = Field(
+        default=5.0,
+        description="Max time to wait for a stable finger capture",
+    )
+    duplicate_identify_threshold: float = Field(
+        default=0.72,
+        description="Stricter threshold used to reject duplicate enrollment",
+    )
 
     sensor_vid: int = Field(default=0x0483, description="USB Vendor ID of the sensor")
     sensor_pid: int = Field(default=0x5720, description="USB Product ID of the sensor")

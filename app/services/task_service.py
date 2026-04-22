@@ -420,6 +420,7 @@ class TaskService:
     async def _capture_from_sensor(self) -> bytes:
         """Capture a fingerprint image from the local sensor."""
         from app.services.sensor_service import SensorService
+        from app.core.config import get_settings
 
         sensor = SensorService.get_instance()
         if sensor is None:
@@ -427,7 +428,12 @@ class TaskService:
         if not sensor.is_connected:
             raise RuntimeError("Sensor not connected")
 
-        capture = await sensor.capture_image()
+        settings = get_settings()
+        capture = await sensor.capture_when_ready(
+            min_quality=float(getattr(settings, "sensor_min_quality", 20.0)),
+            settle_ms=int(getattr(settings, "sensor_settle_ms", 250)),
+            timeout_sec=float(getattr(settings, "sensor_capture_timeout_sec", 5.0)),
+        )
         if not capture.success:
             raise RuntimeError("Sensor capture failed: {}".format(capture.error))
         return capture.image_data
