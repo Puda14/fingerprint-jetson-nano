@@ -333,6 +333,76 @@ class TaskService:
         except Exception as exc:
             logger.error("SYNC task failed: %s", exc)
 
+    def process_user_deleted(self, task_data: dict) -> None:
+        """Process user deletion event from orchestrator."""
+        employee_id = task_data.get("employee_id", "")
+        remote_user_id = task_data.get("user_id", "")
+        logger.info(
+            "Processing USER DELETE: employee_id=%s user_id=%s",
+            employee_id,
+            remote_user_id,
+        )
+
+        try:
+            from app.services.pipeline_service import PipelineService
+
+            pipeline_svc = PipelineService.get_instance()
+            if pipeline_svc is None:
+                raise RuntimeError("PipelineService not initialized")
+
+            success = _run_async(
+                pipeline_svc.sync_remote_user_deleted(task_data)
+            )
+            if success:
+                logger.info(
+                    "USER DELETE completed: employee_id=%s user_id=%s",
+                    employee_id,
+                    remote_user_id,
+                )
+            else:
+                logger.warning(
+                    "USER DELETE failed: employee_id=%s user_id=%s",
+                    employee_id,
+                    remote_user_id,
+                )
+        except Exception as exc:
+            logger.error("USER DELETE task failed: %s", exc)
+
+    def process_fingerprint_deleted(self, task_data: dict) -> None:
+        """Process fingerprint deletion event from orchestrator."""
+        fingerprint_id = task_data.get("fingerprint_id", "")
+        employee_id = task_data.get("employee_id", "")
+        finger_index = task_data.get("finger_index")
+        logger.info(
+            "Processing FINGERPRINT DELETE: fingerprint_id=%s employee_id=%s finger=%s",
+            fingerprint_id,
+            employee_id,
+            finger_index,
+        )
+
+        try:
+            from app.services.pipeline_service import PipelineService
+
+            pipeline_svc = PipelineService.get_instance()
+            if pipeline_svc is None:
+                raise RuntimeError("PipelineService not initialized")
+
+            success = _run_async(
+                pipeline_svc.sync_remote_fingerprint_deleted(task_data)
+            )
+            if success:
+                logger.info(
+                    "FINGERPRINT DELETE completed: fingerprint_id=%s",
+                    fingerprint_id,
+                )
+            else:
+                logger.warning(
+                    "FINGERPRINT DELETE failed: fingerprint_id=%s",
+                    fingerprint_id,
+                )
+        except Exception as exc:
+            logger.error("FINGERPRINT DELETE task failed: %s", exc)
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     async def _capture_from_sensor(self) -> bytes:

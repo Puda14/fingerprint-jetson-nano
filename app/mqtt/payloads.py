@@ -123,6 +123,29 @@ class SyncCheckPayload:
         self.reason: str = kwargs.get("reason", "reconnect")
 
 
+class UserDeletedPayload:
+    """Command from orchestrator telling worker to deactivate a synced user."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.event: str = kwargs.get("event", "user_deleted")
+        self.user_id: str = kwargs.get("user_id", "")
+        self.employee_id: str = kwargs.get("employee_id", "")
+        self.full_name: str = kwargs.get("full_name", "")
+        self.timestamp: str = kwargs.get("timestamp", "")
+
+
+class FingerprintDeletedPayload:
+    """Command from orchestrator telling worker to deactivate one fingerprint."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.event: str = kwargs.get("event", "fingerprint_deleted")
+        self.fingerprint_id: str = kwargs.get("fingerprint_id", "")
+        self.user_id: str = kwargs.get("user_id", "")
+        self.employee_id: str = kwargs.get("employee_id", "")
+        self.finger_index: int = int(kwargs.get("finger_index", 0) or 0)
+        self.timestamp: str = kwargs.get("timestamp", "")
+
+
 # ── Worker → Orchestrator payloads ───────────────────────────────────────────
 
 

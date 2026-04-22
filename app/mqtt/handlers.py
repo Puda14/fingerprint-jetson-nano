@@ -19,11 +19,13 @@ import paho.mqtt.client as mqtt
 
 from app.mqtt.payloads import (
     EnrollmentUploadPayload,
+    FingerprintDeletedPayload,
     ModelStatusPayload,
     ModelUpdatePayload,
     RegisterTaskPayload,
     SyncCheckPayload,
     TaskPayload,
+    UserDeletedPayload,
     VerifyTaskPayload,
 )
 
@@ -62,6 +64,37 @@ def create_message_handler(mqtt_client_ref: Any) -> Any:
                     thread = threading.Thread(
                         target=_handle_sync_check,
                         args=(mqtt_client_ref,),
+                        daemon=True,
+                    )
+                    thread.start()
+                    return
+
+                if len(parts) >= 4 and parts[2] == "sync" and parts[3] == "delete-user":
+                    payload = UserDeletedPayload(**data)
+                    logger.info(
+                        "📥 USER DELETE: employee_id=%s user_id=%s",
+                        payload.employee_id,
+                        payload.user_id,
+                    )
+                    thread = threading.Thread(
+                        target=_handle_user_deleted,
+                        args=(mqtt_client_ref, data),
+                        daemon=True,
+                    )
+                    thread.start()
+                    return
+
+                if len(parts) >= 4 and parts[2] == "sync" and parts[3] == "delete-fingerprint":
+                    payload = FingerprintDeletedPayload(**data)
+                    logger.info(
+                        "📥 FINGERPRINT DELETE: fingerprint_id=%s employee_id=%s finger=%s",
+                        payload.fingerprint_id,
+                        payload.employee_id,
+                        payload.finger_index,
+                    )
+                    thread = threading.Thread(
+                        target=_handle_fingerprint_deleted,
+                        args=(mqtt_client_ref, data),
                         daemon=True,
                     )
                     thread.start()
@@ -230,6 +263,28 @@ def _handle_sync_check(mqtt_client_ref: Any) -> None:
         logger.info("SYNC CHECK completed: sent %d pending enrollment event(s)", sent)
     except Exception as exc:
         logger.error("Sync check failed: %s", exc)
+
+
+def _handle_user_deleted(mqtt_client_ref: Any, task_data: dict) -> None:
+    """Process user deletion sync: deactivate user locally and rebuild FAISS."""
+    try:
+        from app.services.task_service import TaskService
+
+        task_svc = TaskService(mqtt_client_ref)
+        task_svc.process_user_deleted(task_data)
+    except Exception as exc:
+        logger.error("User delete sync failed: %s", exc)
+
+
+def _handle_fingerprint_deleted(mqtt_client_ref: Any, task_data: dict) -> None:
+    """Process fingerprint deletion sync: deactivate template locally and rebuild FAISS."""
+    try:
+        from app.services.task_service import TaskService
+
+        task_svc = TaskService(mqtt_client_ref)
+        task_svc.process_fingerprint_deleted(task_data)
+    except Exception as exc:
+        logger.error("Fingerprint delete sync failed: %s", exc)
 
 
 def _handle_enrollment_upload(mqtt_client_ref: Any, task_data: dict) -> None:

@@ -49,9 +49,9 @@ class UserRepository:
         # type: (User) -> User
         """Insert a new user and return it with generated id."""
         self._db.execute(
-            """INSERT INTO users (employee_id, full_name, department, role, is_active)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user.employee_id, user.full_name, user.department,
+            """INSERT INTO users (user_id, employee_id, full_name, department, role, is_active)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user.user_id, user.employee_id, user.full_name, user.department,
              user.role, int(user.is_active)),
         )
         row = self._db.fetch_one(
@@ -73,6 +73,14 @@ class UserRepository:
         row = self._db.fetch_one(
             "SELECT {} FROM users WHERE employee_id = ?".format(_USER_COLUMNS),
             (employee_id,),
+        )
+        return User.from_row(row) if row else None
+
+    def get_by_user_uuid(self, user_uuid):
+        # type: (str) -> Optional[User]
+        row = self._db.fetch_one(
+            "SELECT {} FROM users WHERE user_id = ?".format(_USER_COLUMNS),
+            (user_uuid,),
         )
         return User.from_row(row) if row else None
 
@@ -108,9 +116,9 @@ class UserRepository:
         if user.id is None:
             raise ValueError("Cannot update user without id")
         self._db.execute(
-            """UPDATE users SET employee_id=?, full_name=?, department=?,
+            """UPDATE users SET user_id=?, employee_id=?, full_name=?, department=?,
                role=?, is_active=?, updated_at=? WHERE id=?""",
-            (user.employee_id, user.full_name, user.department,
+            (user.user_id, user.employee_id, user.full_name, user.department,
              user.role, int(user.is_active), _utcnow(), user.id),
         )
         return self.get_by_id(user.id) or user
@@ -120,6 +128,22 @@ class UserRepository:
         cur = self._db.execute(
             "UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?",
             (_utcnow(), user_id),
+        )
+        return cur.rowcount > 0
+
+    def deactivate_by_employee_id(self, employee_id):
+        # type: (str) -> bool
+        cur = self._db.execute(
+            "UPDATE users SET is_active = 0, updated_at = ? WHERE employee_id = ?",
+            (_utcnow(), employee_id),
+        )
+        return cur.rowcount > 0
+
+    def deactivate_by_user_uuid(self, user_uuid):
+        # type: (str) -> bool
+        cur = self._db.execute(
+            "UPDATE users SET is_active = 0, updated_at = ? WHERE user_id = ?",
+            (_utcnow(), user_uuid),
         )
         return cur.rowcount > 0
 
@@ -154,18 +178,26 @@ class FingerprintRepository:
         # type: (Fingerprint) -> Fingerprint
         self._db.execute(
             """INSERT INTO fingerprints
-               (user_id, finger_index, embedding_enc, minutiae_enc,
+               (fingerprint_id, user_id, finger_index, embedding_enc, minutiae_enc,
                 quality_score, image_hash)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (fp.user_id, fp.finger_index, fp.embedding_enc,
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (fp.fingerprint_id, fp.user_id, fp.finger_index, fp.embedding_enc,
              fp.minutiae_enc, fp.quality_score, fp.image_hash),
         )
-        row = self._db.fetch_one(
-            """SELECT {} FROM fingerprints
-               WHERE user_id = ? AND finger_index = ?
-               ORDER BY id DESC LIMIT 1""".format(_FINGERPRINT_COLUMNS),
-            (fp.user_id, fp.finger_index),
-        )
+        if fp.fingerprint_id:
+            row = self._db.fetch_one(
+                "SELECT {} FROM fingerprints WHERE fingerprint_id = ?".format(
+                    _FINGERPRINT_COLUMNS
+                ),
+                (fp.fingerprint_id,),
+            )
+        else:
+            row = self._db.fetch_one(
+                """SELECT {} FROM fingerprints
+                   WHERE user_id = ? AND finger_index = ?
+                   ORDER BY id DESC LIMIT 1""".format(_FINGERPRINT_COLUMNS),
+                (fp.user_id, fp.finger_index),
+            )
         return Fingerprint.from_row(row) if row else fp
 
     def get_by_id(self, fp_id):
@@ -195,6 +227,17 @@ class FingerprintRepository:
             sql += " AND is_active = 1"
         sql += " ORDER BY id DESC LIMIT 1"
         row = self._db.fetch_one(sql, (image_hash,))
+        return Fingerprint.from_row(row) if row else None
+
+    def get_by_fingerprint_id(self, fingerprint_id, active_only=True):
+        # type: (str, bool) -> Optional[Fingerprint]
+        sql = "SELECT {} FROM fingerprints WHERE fingerprint_id = ?".format(
+            _FINGERPRINT_COLUMNS
+        )
+        if active_only:
+            sql += " AND is_active = 1"
+        sql += " ORDER BY id DESC LIMIT 1"
+        row = self._db.fetch_one(sql, (fingerprint_id,))
         return Fingerprint.from_row(row) if row else None
 
     def get_active_embeddings(self):
@@ -232,11 +275,27 @@ class FingerprintRepository:
         )
         return cur.rowcount > 0
 
+    def deactivate_by_fingerprint_id(self, fingerprint_id):
+        # type: (str) -> int
+        cur = self._db.execute(
+            "UPDATE fingerprints SET is_active = 0 WHERE fingerprint_id = ?",
+            (fingerprint_id,),
+        )
+        return cur.rowcount
+
     def deactivate_by_user(self, user_id):
         # type: (int) -> int
         cur = self._db.execute(
             "UPDATE fingerprints SET is_active = 0 WHERE user_id = ?",
             (user_id,),
+        )
+        return cur.rowcount
+
+    def deactivate_by_user_and_finger(self, user_id, finger_index):
+        # type: (int, int) -> int
+        cur = self._db.execute(
+            "UPDATE fingerprints SET is_active = 0 WHERE user_id = ? AND finger_index = ?",
+            (user_id, finger_index),
         )
         return cur.rowcount
 

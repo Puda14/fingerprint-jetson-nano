@@ -459,6 +459,91 @@ class PipelineService:
         await self._rebuild_faiss_index()
         return True
 
+    async def sync_remote_user_deleted(self, data: Dict[str, Any]) -> bool:
+        """Deactivate a locally cached user after an orchestrator delete event."""
+        if self._user_repo is None:
+            return False
+
+        remote_user_id = str(data.get("user_id", "") or "")
+        employee_id = str(data.get("employee_id", "") or "").strip()
+        if not remote_user_id and not employee_id:
+            logger.warning("User delete event missing user_id and employee_id.")
+            return False
+
+        loop = asyncio.get_event_loop()
+        local_user = None
+
+        if remote_user_id:
+            local_user = await loop.run_in_executor(
+                None, self._user_repo.get_by_user_uuid, remote_user_id
+            )
+        if local_user is None and employee_id:
+            local_user = await loop.run_in_executor(
+                None, self._user_repo.get_by_employee_id, employee_id
+            )
+        if local_user is None:
+            logger.info(
+                "User delete sync skipped; no local record found (user_id=%s employee_id=%s)",
+                remote_user_id,
+                employee_id,
+            )
+            return True
+
+        changed = await loop.run_in_executor(None, self._user_repo.deactivate, local_user.id)
+        if self._fp_repo is not None:
+            await loop.run_in_executor(None, self._fp_repo.deactivate_by_user, local_user.id)
+        if changed:
+            await self._rebuild_faiss_index()
+        return True
+
+    async def sync_remote_fingerprint_deleted(self, data: Dict[str, Any]) -> bool:
+        """Deactivate a locally cached fingerprint after an orchestrator delete event."""
+        if self._fp_repo is None or self._user_repo is None:
+            return False
+
+        fingerprint_id = str(data.get("fingerprint_id", "") or "")
+        remote_user_id = str(data.get("user_id", "") or "")
+        employee_id = str(data.get("employee_id", "") or "").strip()
+        finger_index_raw = data.get("finger_index")
+
+        loop = asyncio.get_event_loop()
+        deactivated = 0
+
+        if fingerprint_id:
+            deactivated = await loop.run_in_executor(
+                None, self._fp_repo.deactivate_by_fingerprint_id, fingerprint_id
+            )
+
+        if deactivated <= 0 and finger_index_raw is not None:
+            local_user = None
+            if remote_user_id:
+                local_user = await loop.run_in_executor(
+                    None, self._user_repo.get_by_user_uuid, remote_user_id
+                )
+            if local_user is None and employee_id:
+                local_user = await loop.run_in_executor(
+                    None, self._user_repo.get_by_employee_id, employee_id
+                )
+            if local_user is not None:
+                deactivated = await loop.run_in_executor(
+                    None,
+                    self._fp_repo.deactivate_by_user_and_finger,
+                    local_user.id,
+                    int(finger_index_raw),
+                )
+
+        if deactivated <= 0:
+            logger.info(
+                "Fingerprint delete sync skipped; no local record found (fingerprint_id=%s employee_id=%s finger=%s)",
+                fingerprint_id,
+                employee_id,
+                finger_index_raw,
+            )
+            return True
+
+        await self._rebuild_faiss_index()
+        return True
+
     # -- sync ----------------------------------------------------------------
 
     async def sync_from_server(self, payload: Dict[str, Any]) -> Tuple[int, int]:
@@ -1454,11 +1539,12 @@ class PipelineService:
         source_worker_id = str(data.get("worker_id", "") or "")
         source_fp_id = fp_data.get("fp_id")
 
-        remote_user_id = user_data.get("id")
-        employee_id = user_data.get("employee_id", "")
-        full_name = user_data.get("full_name", "")
-        department = user_data.get("department", "")
-        role = user_data.get("role", "user")
+        remote_user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        employee_id = str(user_data.get("employee_id", "") or "")
+        full_name = str(user_data.get("full_name", "") or "")
+        department = str(user_data.get("department", "") or "")
+        role = str(user_data.get("role", "user") or "user")
+        remote_fingerprint_id = str(fp_data.get("fingerprint_id") or "")
 
         embedding_list = fp_data.get("embedding", [])
         finger_index = fp_data.get("finger_index", 0)
@@ -1479,6 +1565,7 @@ class PipelineService:
                 )
                 if existing is None:
                     user = User(
+                        user_id=remote_user_id or None,
                         employee_id=employee_id,
                         full_name=full_name,
                         department=department,
@@ -1489,21 +1576,35 @@ class PipelineService:
                     )
                     logger.info("Sync: created local user '%s' (id=%d)",
                                 full_name, existing.id)
+                elif remote_user_id and not existing.user_id:
+                    existing = await loop.run_in_executor(
+                        None, self._user_repo.update, existing.with_updates(user_id=remote_user_id)
+                    )
                 local_user_id = existing.id
             else:
                 logger.warning("Sync: no user repo, cannot persist.")
                 return False
 
             if self._fp_repo is not None:
-                existing_fp = await loop.run_in_executor(
-                    None,
-                    self._fp_repo.get_by_image_hash,
-                    sync_hash,
-                    True,
-                )
+                existing_fp = None
+                if remote_fingerprint_id:
+                    existing_fp = await loop.run_in_executor(
+                        None,
+                        self._fp_repo.get_by_fingerprint_id,
+                        remote_fingerprint_id,
+                        True,
+                    )
+                if existing_fp is None:
+                    existing_fp = await loop.run_in_executor(
+                        None,
+                        self._fp_repo.get_by_image_hash,
+                        sync_hash,
+                        True,
+                    )
                 if existing_fp is not None:
                     logger.info(
-                        "Sync: fingerprint already present locally, skip duplicate sync (%s)",
+                        "Sync: fingerprint already present locally, skip duplicate sync (%s/%s)",
+                        remote_fingerprint_id,
                         sync_hash,
                     )
                     return True
@@ -1519,6 +1620,7 @@ class PipelineService:
                 )
 
             fp_record = Fingerprint(
+                fingerprint_id=remote_fingerprint_id or None,
                 user_id=local_user_id,
                 finger_index=finger_index,
                 embedding_enc=embedding_enc,

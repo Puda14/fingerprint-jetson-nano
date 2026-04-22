@@ -149,6 +149,8 @@ class MQTTWorkerClient:
                 ("task/{}/verify".format(self._worker_id), 1),
                 ("task/{}/sync".format(self._worker_id), 1),
                 ("task/{}/sync/check".format(self._worker_id), 1),
+                ("task/{}/sync/delete-user".format(self._worker_id), 1),
+                ("task/{}/sync/delete-fingerprint".format(self._worker_id), 1),
                 ("task/{}/message".format(self._worker_id), 1),
                 ("task/{}/enrollment/upload".format(self._worker_id), 1),
                 ("task/{}/model/update".format(self._worker_id), 1),
