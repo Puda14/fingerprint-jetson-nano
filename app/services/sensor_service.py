@@ -63,12 +63,11 @@ class SensorService:
             logger.info("SensorService: USB sensor connected successfully")
             return True
 
-        # Fallback to mock so API still works in dev
-        logger.warning(
-            "SensorService: USB sensor not found, falling back to MockSensorDriver"
-        )
-        self._driver = MockSensorDriver()
-        self._driver.open()
+        # Do not silently fall back to mock mode in production paths.
+        # Otherwise the system may keep returning sample images and create
+        # dangerous false matches while appearing healthy.
+        logger.warning("SensorService: USB sensor not found")
+        self._driver = None
         return False
 
     async def shutdown(self) -> None:

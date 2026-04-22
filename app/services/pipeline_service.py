@@ -798,9 +798,8 @@ class PipelineService:
             )
             if duplicate_candidates:
                 duplicate = duplicate_candidates[0]
-                same_user_duplicate_threshold = max(0.90, duplicate_threshold + 0.15)
                 is_same_user = int(duplicate.user_id) == int(user_id)
-                if (not is_same_user) or float(duplicate.score) >= same_user_duplicate_threshold:
+                if not is_same_user:
                     return EnrollResult(
                         user_id=user_id,
                         finger=selected_finger,
