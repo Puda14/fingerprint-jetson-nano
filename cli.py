@@ -256,6 +256,7 @@ def print_menu():
     print("  {bold}[t]{reset}  🧪  Test (image-based)".format(bold=C.BOLD, reset=C.RESET))
     print("  {yellow}{line}{reset}".format(yellow=C.YELLOW, line="─" * 48, reset=C.RESET))
     print("  {bold}[r]{reset}  🔄  Reconnect MQTT".format(bold=C.BOLD, reset=C.RESET))
+    print("  {bold}[s]{reset}  🔄  Sync from Server".format(bold=C.BOLD, reset=C.RESET))
     print("  {bold}[c]{reset}  🧹  Clear Screen".format(bold=C.BOLD, reset=C.RESET))
     print("  {bold}[0]{reset}  🚪  Exit".format(bold=C.BOLD, reset=C.RESET))
     print("  {yellow}{line}{reset}".format(yellow=C.YELLOW, line="─" * 48, reset=C.RESET))
@@ -847,6 +848,35 @@ def cmd_reconnect():
     print()
 
 
+# ── [s] Sync from Server ──────────────────────────────────
+def cmd_sync():
+    print("\n  {cyan}{bold}═══ SYNC DATA FROM SERVER ═══{reset}\n".format(cyan=C.CYAN, bold=C.BOLD, reset=C.RESET))
+    # Fetch from orchestrator
+    url = "http://{}:8000/api/sync/full".format(MQTT_HOST)
+    print("  {yellow}⏳ Fetching data from Orchestrator: {}{reset}".format(url, yellow=C.YELLOW, reset=C.RESET))
+
+    try:
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as e:
+        print("  {red}✗ Failed to fetch sync data: {}{reset}".format(e, red=C.RED, reset=C.RESET))
+        return
+
+    users = payload.get("users", [])
+    fingerprints = payload.get("fingerprints", [])
+    print("  {green}✓ Received {} users, {} fingerprints.{reset}".format(
+        len(users), len(fingerprints), green=C.GREEN, reset=C.RESET))
+
+    print("  {yellow}⏳ Overwriting local database and rebuilding FAISS...{reset}".format(yellow=C.YELLOW, reset=C.RESET))
+    res = api_request("POST", "/system/sync", data=payload)
+    if res.get("success"):
+        data = res.get("data", {})
+        print("  {green}✓ Sync completed! Synced {} users, {} templates.{reset}".format(
+            data.get("users_synced"), data.get("fingerprints_synced"), green=C.GREEN, reset=C.RESET))
+    else:
+        print("  {red}✗ Sync failed! {err}{reset}".format(red=C.RED, err=res.get("error"), reset=C.RESET))
+
 # ── Main CLI Loop ───────────────────────────────────────────
 def run_cli():
     clear_screen()
@@ -887,6 +917,7 @@ def run_cli():
         "9": cmd_mqtt_stats,
         "t": cmd_test,
         "r": cmd_reconnect,
+        "s": cmd_sync,
         "c": lambda: (clear_screen(), print_banner()),
     }
 

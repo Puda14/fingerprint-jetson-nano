@@ -188,3 +188,23 @@ async def devices(
         success=True,
         data=[DeviceInfo(**d) for d in devs],
     )
+
+# ---------------------------------------------------------------------------
+# POST /sync — sync data from orchestrator
+# ---------------------------------------------------------------------------
+
+
+@router.post("/sync", response_model=ApiResponse)
+async def sync_data(
+    payload: Dict[str, Any],
+    pipeline: PipelineService = Depends(get_pipeline_service),
+) -> ApiResponse:
+    """Overwrite local DB and FAISS index with server data payload."""
+    try:
+        users_count, fps_count = await pipeline.sync_from_server(payload)
+        return ApiResponse(
+            success=True,
+            data={"users_synced": users_count, "fingerprints_synced": fps_count},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

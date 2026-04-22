@@ -459,6 +459,61 @@ class PipelineService:
         await self._rebuild_faiss_index()
         return True
 
+    # -- sync ----------------------------------------------------------------
+
+    async def sync_from_server(self, payload: Dict[str, Any]) -> Tuple[int, int]:
+        """Overwrite local db with server sync payload and rebuild FAISS."""
+        if self._db is None or self._user_repo is None or self._fp_repo is None:
+            raise RuntimeError("Database not available")
+
+        users_data = payload.get("users", [])
+        fps_data = payload.get("fingerprints", [])
+
+        loop = asyncio.get_event_loop()
+
+        def _sync_tx(conn: sqlite3.Connection):
+            # 1. Wipe existing data
+            conn.execute("DELETE FROM verification_logs")
+            conn.execute("DELETE FROM fingerprints")
+            conn.execute("DELETE FROM users")
+
+            # 2. Insert users
+            user_id_map = {}  # server user_id -> sqlite local id
+            for u in users_data:
+                cursor = conn.execute(
+                    "INSERT INTO users (user_id, employee_id, full_name, department, role, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+                    (u.get("user_id"), u.get("employee_id"), u.get("full_name"), u.get("department", ""), u.get("role", "user"), 1 if u.get("is_active", True) else 0)
+                )
+                user_id_map[u.get("user_id")] = cursor.lastrowid
+
+            # 3. Insert fingerprints
+            for fp in fps_data:
+                srv_user_id = fp.get("user_id")
+                local_user_id = user_id_map.get(srv_user_id)
+                if not local_user_id:
+                    continue
+
+                emb_enc = None
+                embedding_list = fp.get("embedding", [])
+                if embedding_list:
+                    if self._crypto is not None:
+                        emb_enc = self._crypto.encrypt_embedding(embedding_list)
+                    else:
+                        import struct
+                        emb_enc = struct.pack("<{}f".format(EMBEDDING_DIM), *embedding_list)
+
+                conn.execute(
+                    "INSERT INTO fingerprints (fingerprint_id, user_id, finger_index, quality_score, image_hash, embedding_enc, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (fp.get("fingerprint_id"), local_user_id, fp.get("finger_index", 0), fp.get("quality_score", 0), fp.get("image_hash", ""), emb_enc, 1)
+                )
+
+        await loop.run_in_executor(None, lambda: list(self._db.transaction())[0].execute("BEGIN") or _sync_tx(self._db._conn) or self._db._conn.commit())
+
+        # Rebuild FAISS
+        await self._rebuild_faiss_index()
+
+        return len(users_data), len(fps_data)
+
     # -- enrollment ----------------------------------------------------------
 
     async def enroll_user(

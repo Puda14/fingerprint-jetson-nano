@@ -24,6 +24,7 @@ _DDL_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS users (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     TEXT    UNIQUE,
         employee_id TEXT    NOT NULL UNIQUE,
         full_name   TEXT    NOT NULL,
         department  TEXT    NOT NULL DEFAULT '',
@@ -38,6 +39,7 @@ _DDL_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS fingerprints (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        fingerprint_id TEXT    UNIQUE,
         user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         finger_index   INTEGER NOT NULL CHECK (finger_index BETWEEN 0 AND 9),
         embedding_enc  BLOB,
@@ -172,6 +174,21 @@ class DatabaseManager:
                 conn.execute(ddl)
             for idx in _INDEX_STATEMENTS:
                 conn.execute(idx)
+
+            # Lightweight migrations
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(users)")
+            cols = [r[1] for r in cursor.fetchall()]
+            if 'user_id' not in cols:
+                conn.execute("ALTER TABLE users ADD COLUMN user_id TEXT UNIQUE")
+                logger.info("Migrated SQLite: added users.user_id")
+
+            cursor.execute("PRAGMA table_info(fingerprints)")
+            cols = [r[1] for r in cursor.fetchall()]
+            if 'fingerprint_id' not in cols:
+                conn.execute("ALTER TABLE fingerprints ADD COLUMN fingerprint_id TEXT UNIQUE")
+                logger.info("Migrated SQLite: added fingerprints.fingerprint_id")
+
             conn.commit()
         except Exception:
             conn.rollback()
