@@ -46,15 +46,15 @@ class Settings(BaseSettings):
     clahe_grid: int = 8
 
     verify_threshold: float = Field(
-        default=0.82,
+        default=0.96,
         description="Cosine similarity threshold for 1:1 verification",
     )
     verify_margin: float = Field(
-        default=0.08,
+        default=0.05,
         description="Minimum margin between target score and best non-target score",
     )
     identify_threshold: float = Field(
-        default=0.80,
+        default=0.95,
         description="Cosine similarity threshold for 1:N identification",
     )
     identify_top_k: int = Field(
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
         description="Max number of results returned in 1:N identification",
     )
     identify_margin: float = Field(
-        default=0.08,
+        default=0.05,
         description="Minimum margin between best and second-best user in 1:N identification",
     )
     sensor_min_quality: float = Field(
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
         description="Max time to wait for a stable finger capture",
     )
     duplicate_identify_threshold: float = Field(
-        default=0.95,
+        default=0.98,
         description="Stricter threshold used to reject duplicate enrollment",
     )
 
