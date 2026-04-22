@@ -977,6 +977,12 @@ class PipelineService:
         except Exception:
             return None
 
+    @staticmethod
+    def _is_remote_synced_fingerprint(fp_obj: Optional[Fingerprint]) -> bool:
+        if fp_obj is None:
+            return False
+        return bool(fp_obj.image_hash and fp_obj.image_hash.startswith("synced:"))
+
     def _mark_fp_synced(self, fp_id: int) -> None:
         with self._sync_lock:
             state = self._load_sync_state()
@@ -1172,10 +1178,11 @@ class PipelineService:
             }
 
             for fp_id, user_id, embedding_enc in self._fp_repo.get_active_embeddings():
-                if fp_id in uploaded or fp_id in pending_ids:
-                    continue
-
                 fp_obj = self._fp_repo.get_by_id(fp_id)
+                if fp_id in synced or fp_id in uploaded or fp_id in pending_ids:
+                    continue
+                if self._is_remote_synced_fingerprint(fp_obj):
+                    continue
                 user_obj = self._user_repo.get_by_id(user_id)
                 if fp_obj is None or user_obj is None or embedding_enc is None:
                     continue
@@ -1219,10 +1226,20 @@ class PipelineService:
             uploaded = {int(x) for x in state.get("uploaded_fp_ids", [])}
 
             for payload in pending:
+                fp_id = self._payload_fp_id(payload)
+                fp_obj = self._fp_repo.get_by_id(fp_id) if fp_id is not None else None
+                if (
+                    fp_id is not None
+                    and (
+                        fp_id in synced
+                        or self._is_remote_synced_fingerprint(fp_obj)
+                    )
+                ):
+                    continue
+
                 topic = "worker/{}/enrolled".format(self._settings.device_id)
                 ok = mqtt_client.publish(topic, json.dumps(payload), qos=1)
                 if ok:
-                    fp_id = self._payload_fp_id(payload)
                     if fp_id is not None:
                         synced.add(fp_id)
                         if not payload.get("fingerprint", {}).get("image_available"):
