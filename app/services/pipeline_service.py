@@ -812,20 +812,22 @@ class PipelineService:
             )
             if duplicate_candidates:
                 duplicate = duplicate_candidates[0]
-                return EnrollResult(
-                    user_id=user_id,
-                    finger=selected_finger,
-                    quality_score=quality,
-                    template_count=0,
-                    success=False,
-                    message=(
-                        "Fingerprint already enrolled: {} ({}) — score {:.1f}%".format(
-                            duplicate.full_name,
-                            duplicate.employee_id,
-                            duplicate.score * 100,
-                        )
-                    ),
-                )
+                is_same_user = int(duplicate.user_id) == int(user_id)
+                if not is_same_user:
+                    return EnrollResult(
+                        user_id=user_id,
+                        finger=selected_finger,
+                        quality_score=quality,
+                        template_count=0,
+                        success=False,
+                        message=(
+                            "Fingerprint already enrolled by another user: {} ({}) — score {:.1f}%".format(
+                                duplicate.full_name,
+                                duplicate.employee_id,
+                                duplicate.score * 100,
+                            )
+                        ),
+                    )
 
             # Encrypt and save to DB
             embedding_list = embedding.tolist()
