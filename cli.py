@@ -472,13 +472,21 @@ def cmd_list_users():
     print("  {dim}{line}{reset}".format(dim=C.DIM, line="─" * 65, reset=C.RESET))
 
     for i, u in enumerate(users, 1):
-        fingers = len(u.get("enrolled_fingers", []))
+        fingers = int(
+            u.get("fingerprint_count", len(u.get("enrolled_fingers", []))) or 0
+        )
         active = u.get("is_active", True)
         st = "{green}active{reset}".format(green=C.GREEN, reset=C.RESET) if active else "{red}off{reset}".format(red=C.RED, reset=C.RESET)
         fs = "{mag}{n}{reset}".format(mag=C.MAGENTA, n=fingers, reset=C.RESET) if fingers else "{dim}0{reset}".format(dim=C.DIM, reset=C.RESET)
+        display_name = (
+            u.get("full_name")
+            or u.get("employee_id")
+            or u.get("user_id")
+            or ""
+        )
         print("  {bold}[{i}]{reset}  {name:<20} {eid:<12} {st:<22} {fs}".format(
             bold=C.BOLD, reset=C.RESET, i=i,
-            name=u.get("full_name", "")[:18], eid=u.get("employee_id", "")[:10],
+            name=display_name[:18], eid=u.get("employee_id", "")[:10],
             st=st, fs=fs))
     print()
 
