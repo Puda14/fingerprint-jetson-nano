@@ -460,7 +460,7 @@ class PipelineService:
         return True
 
     async def sync_remote_user_deleted(self, data: Dict[str, Any]) -> bool:
-        """Deactivate a locally cached user after an orchestrator delete event."""
+        """Delete a locally cached user after an orchestrator delete event."""
         if self._user_repo is None:
             return False
 
@@ -471,17 +471,16 @@ class PipelineService:
             return False
 
         loop = asyncio.get_event_loop()
-        local_user = None
-
+        changed = False
         if remote_user_id:
-            local_user = await loop.run_in_executor(
-                None, self._user_repo.get_by_user_uuid, remote_user_id
+            changed = await loop.run_in_executor(
+                None, self._user_repo.delete_by_user_uuid, remote_user_id
             )
-        if local_user is None and employee_id:
-            local_user = await loop.run_in_executor(
-                None, self._user_repo.get_by_employee_id, employee_id
+        if not changed and employee_id:
+            changed = await loop.run_in_executor(
+                None, self._user_repo.delete_by_employee_id, employee_id
             )
-        if local_user is None:
+        if not changed:
             logger.info(
                 "User delete sync skipped; no local record found (user_id=%s employee_id=%s)",
                 remote_user_id,
@@ -489,15 +488,12 @@ class PipelineService:
             )
             return True
 
-        changed = await loop.run_in_executor(None, self._user_repo.deactivate, local_user.id)
-        if self._fp_repo is not None:
-            await loop.run_in_executor(None, self._fp_repo.deactivate_by_user, local_user.id)
         if changed:
             await self._rebuild_faiss_index()
         return True
 
     async def sync_remote_fingerprint_deleted(self, data: Dict[str, Any]) -> bool:
-        """Deactivate a locally cached fingerprint after an orchestrator delete event."""
+        """Delete a locally cached fingerprint after an orchestrator delete event."""
         if self._fp_repo is None or self._user_repo is None:
             return False
 
@@ -511,7 +507,7 @@ class PipelineService:
 
         if fingerprint_id:
             deactivated = await loop.run_in_executor(
-                None, self._fp_repo.deactivate_by_fingerprint_id, fingerprint_id
+                None, self._fp_repo.delete_by_fingerprint_id, fingerprint_id
             )
 
         if deactivated <= 0 and finger_index_raw is not None:
@@ -527,7 +523,7 @@ class PipelineService:
             if local_user is not None:
                 deactivated = await loop.run_in_executor(
                     None,
-                    self._fp_repo.deactivate_by_user_and_finger,
+                    self._fp_repo.delete_by_user_and_finger,
                     local_user.id,
                     int(finger_index_raw),
                 )

@@ -152,6 +152,16 @@ class UserRepository:
         cur = self._db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return cur.rowcount > 0
 
+    def delete_by_user_uuid(self, user_uuid):
+        # type: (str) -> bool
+        cur = self._db.execute("DELETE FROM users WHERE user_id = ?", (user_uuid,))
+        return cur.rowcount > 0
+
+    def delete_by_employee_id(self, employee_id):
+        # type: (str) -> bool
+        cur = self._db.execute("DELETE FROM users WHERE employee_id = ?", (employee_id,))
+        return cur.rowcount > 0
+
     def count(self, active_only=False):
         # type: (bool) -> int
         if active_only:
@@ -305,6 +315,22 @@ class FingerprintRepository:
             "DELETE FROM fingerprints WHERE id = ?", (fp_id,),
         )
         return cur.rowcount > 0
+
+    def delete_by_fingerprint_id(self, fingerprint_id):
+        # type: (str) -> int
+        cur = self._db.execute(
+            "DELETE FROM fingerprints WHERE fingerprint_id = ?",
+            (fingerprint_id,),
+        )
+        return cur.rowcount
+
+    def delete_by_user_and_finger(self, user_id, finger_index):
+        # type: (int, int) -> int
+        cur = self._db.execute(
+            "DELETE FROM fingerprints WHERE user_id = ? AND finger_index = ?",
+            (user_id, finger_index),
+        )
+        return cur.rowcount
 
     def count(self, active_only=False):
         # type: (bool) -> int

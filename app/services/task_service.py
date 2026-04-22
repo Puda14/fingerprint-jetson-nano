@@ -36,18 +36,30 @@ def _get_cached_engine(onnx_path: str) -> Any:
 
 
 def _run_async(coro: Any) -> Any:
-    """Run an async coroutine from a synchronous context (background thread)."""
+    """Run an async coroutine from a synchronous context.
+
+    Compatible with Python 3.6 where ``asyncio.run`` does not exist.
+    """
     try:
         loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result(timeout=60)
-        else:
-            return loop.run_until_complete(coro)
     except RuntimeError:
-        return asyncio.run(coro)
+        loop = None
+
+    if loop is not None and not loop.is_running():
+        return loop.run_until_complete(coro)
+
+    new_loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(new_loop)
+        return new_loop.run_until_complete(coro)
+    finally:
+        try:
+            new_loop.close()
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
 
 
 class TaskService:
